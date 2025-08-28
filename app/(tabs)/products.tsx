@@ -8,7 +8,9 @@ import {
   StatusBar,
   TouchableOpacity,
   Image,
+  Alert,
 } from 'react-native';
+import { router } from 'expo-router';
 import { Plus, Search, Filter, MoveVertical as MoreVertical, Eye, CreditCard as Edit, Trash2 } from 'lucide-react-native';
 import { COLORS, SIZES } from '@/constants/theme';
 import AnimatedCard from '@/components/AnimatedCard';
@@ -53,6 +55,10 @@ export default function Products() {
       image: 'https://images.pexels.com/photos/1152077/pexels-photo-1152077.jpeg?auto=compress&cs=tinysrgb&w=400',
     },
   ]);
+
+  const handleAddProduct = () => {
+    router.push('/products/add-product');
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -128,7 +134,7 @@ export default function Products() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Products</Text>
-        <TouchableOpacity style={styles.addButton}>
+        <TouchableOpacity style={styles.addButton} onPress={handleAddProduct}>
           <Plus size={20} color={COLORS.white} />
         </TouchableOpacity>
       </View>
@@ -178,7 +184,7 @@ export default function Products() {
       <View style={styles.bottomContainer}>
         <CustomButton
           title="Add New Product"
-          onPress={() => {}}
+          onPress={handleAddProduct}
           style={styles.addProductButton}
         />
       </View>

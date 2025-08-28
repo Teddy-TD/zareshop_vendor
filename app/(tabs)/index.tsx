@@ -6,8 +6,10 @@ import {
   ScrollView,
   SafeAreaView,
   StatusBar,
+  TouchableOpacity,
 } from 'react-native';
-import { TrendingUp, ShoppingBag, TriangleAlert as AlertTriangle, DollarSign } from 'lucide-react-native';
+import { TrendingUp, ShoppingBag, TriangleAlert as AlertTriangle, DollarSign, Bell } from 'lucide-react-native';
+import { router } from 'expo-router';
 import { COLORS, SIZES } from '@/constants/theme';
 import StatsCard from '@/components/StatsCard';
 import AnimatedCard from '@/components/AnimatedCard';
@@ -29,8 +31,19 @@ export default function Dashboard() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.greeting}>Good Morning!</Text>
-          <Text style={styles.storeName}>Zareshop Vendor</Text>
+          <View style={styles.headerLeft}>
+            <Text style={styles.greeting}>Good Morning!</Text>
+            <Text style={styles.storeName}>Zareshop Vendor</Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.notificationsButton}
+            onPress={() => router.push('/notifications')}
+          >
+            <Bell size={24} color={COLORS.text} />
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationCount}>3</Text>
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Quick Stats */}
@@ -134,8 +147,14 @@ const styles = StyleSheet.create({
     paddingBottom: SIZES.xl,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     padding: SIZES.md,
     paddingTop: SIZES.lg,
+  },
+  headerLeft: {
+    flex: 1,
   },
   greeting: {
     fontSize: 16,
@@ -211,5 +230,31 @@ const styles = StyleSheet.create({
   activityTime: {
     fontSize: 12,
     color: COLORS.textLight,
+  },
+  notificationsButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: COLORS.error,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationCount: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });

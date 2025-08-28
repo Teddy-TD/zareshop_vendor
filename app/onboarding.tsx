@@ -77,12 +77,12 @@ export default function OnboardingScreen() {
         withSpring(1, { damping: 10 })
       );
     } else {
-      router.replace('/(tabs)');
+      router.replace('/auth/login');
     }
   };
 
   const skipToLogin = () => {
-    router.replace('/(tabs)');
+    router.replace('/auth/login');
   };
 
   const slideAnimatedStyle = useAnimatedStyle(() => ({

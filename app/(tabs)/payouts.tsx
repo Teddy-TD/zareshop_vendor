@@ -7,6 +7,7 @@ import {
   SafeAreaView,
   StatusBar,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import {
   CreditCard,
@@ -46,6 +47,49 @@ export default function Payouts() {
       account: '**** 9012',
     },
   ]);
+
+  const handleRequestPayout = () => {
+    Alert.prompt(
+      'Request Payout',
+      'Enter payout amount (ETB):',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Request', 
+          style: 'default',
+          onPress: (amount) => {
+            if (amount && !isNaN(Number(amount)) && Number(amount) > 0) {
+              const numAmount = Number(amount);
+              if (numAmount > 96450) {
+                Alert.alert('Error', 'Amount exceeds available balance (96,450 ETB)');
+                return;
+              }
+              // Simulate payout request
+              Alert.alert(
+                'Payout Requested',
+                `Your payout request for ${numAmount.toLocaleString()} ETB has been submitted. You will receive the funds within 2-3 business days.`,
+                [{ text: 'OK', style: 'default' }]
+              );
+            } else {
+              Alert.alert('Error', 'Please enter a valid amount');
+            }
+          }
+        }
+      ],
+      'plain-text',
+      '96450'
+    );
+  };
+
+  const handleAddPaymentMethod = () => {
+    Alert.alert(
+      'Add Payment Method',
+      'Payment method form will be implemented here. This would typically open a form to add bank account or mobile money details.',
+      [
+        { text: 'OK', style: 'default' }
+      ]
+    );
+  };
 
   const getStatusConfig = (status: string) => {
     switch (status) {
@@ -128,7 +172,7 @@ export default function Payouts() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Payouts</Text>
-        <TouchableOpacity style={styles.addButton}>
+        <TouchableOpacity style={styles.addButton} onPress={handleAddPaymentMethod}>
           <Plus size={20} color={COLORS.white} />
         </TouchableOpacity>
       </View>
@@ -137,7 +181,7 @@ export default function Payouts() {
       <AnimatedCard delay={0} style={styles.balanceCard}>
         <View style={styles.balanceHeader}>
           <Text style={styles.balanceTitle}>Available Balance</Text>
-          <CreditCard size={24} color={COLORS.primary} />
+          <CreditCard size={24} color={COLORS.white} />
         </View>
         <Text style={styles.balanceAmount}>96,450 ETB</Text>
         <Text style={styles.balanceSubtext}>Ready for withdrawal</Text>
@@ -194,7 +238,7 @@ export default function Payouts() {
       <View style={styles.bottomContainer}>
         <CustomButton
           title="Request Payout"
-          onPress={() => {}}
+          onPress={handleRequestPayout}
           style={styles.requestButton}
         />
       </View>
