@@ -148,11 +148,20 @@ export default function OnboardingScreen() {
       </TouchableOpacity>
 
       {/* Slides Container */}
-      <Animated.View style={[styles.slidesContainer, slideAnimatedStyle]}>
+      <View style={styles.slidesContainer}>
         {slides.map((slide, index) => (
-          <SlideContent key={slide.id} slide={slide} index={index} />
+          <View
+            key={slide.id}
+            style={[
+              styles.slide,
+              { backgroundColor: slide.color + '10' },
+              { opacity: currentSlide === index ? 1 : 0 }
+            ]}
+          >
+            <SlideContent slide={slide} index={index} />
+          </View>
         ))}
-      </Animated.View>
+      </View>
 
       {/* Bottom Section */}
       <View style={styles.bottomSection}>
@@ -201,15 +210,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   slidesContainer: {
-    flexDirection: 'row',
     flex: 1,
+    position: 'relative',
   },
   slide: {
-    width: SCREEN_WIDTH,
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: SIZES.lg,
+    width: '100%',
+    height: '100%',
   },
   iconContainer: {
     position: 'relative',
