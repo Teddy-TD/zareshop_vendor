@@ -1,8 +1,36 @@
 import { Tabs } from 'expo-router';
 import { Chrome as Home, Package, ShoppingCart, CreditCard, User } from 'lucide-react-native';
 import { COLORS } from '@/constants/theme';
+import { useAuth } from '@/hooks/useAuth';
+import { useEffect } from 'react';
+import { router } from 'expo-router';
+import { View, ActivityIndicator } from 'react-native';
 
 export default function TabLayout() {
+  const { checkAuth, isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    // Only check auth if not loading and not authenticated
+    if (!isLoading && !isAuthenticated) {
+      checkAuth();
+    }
+  }, [isLoading, isAuthenticated, checkAuth]);
+
+  // Show loading while authentication state is being restored
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.white }}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    );
+  }
+
+  // If not authenticated after loading, redirect to login
+  if (!isAuthenticated) {
+    router.replace('/auth/login');
+    return null;
+  }
+
   return (
     <Tabs
       screenOptions={{

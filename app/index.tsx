@@ -17,8 +17,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { COLORS, SIZES } from '@/constants/theme';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function SplashScreen() {
+  const { isAuthenticated, isLoading } = useAuth();
   const logoScale = useSharedValue(0);
   const logoOpacity = useSharedValue(0);
   const titleOpacity = useSharedValue(0);
@@ -37,14 +39,27 @@ export default function SplashScreen() {
     titleTranslateY.value = withDelay(
       300,
       withTiming(0, { duration: 600 }, () => {
-        runOnJS(navigateToOnboarding)();
+        runOnJS(navigateToApp)();
       })
     );
   }, []);
 
-  const navigateToOnboarding = () => {
+  const navigateToApp = () => {
     setTimeout(() => {
-      router.replace('/onboarding');
+      // Wait for authentication state to be restored
+      if (isLoading) {
+        // If still loading, wait a bit more
+        setTimeout(navigateToApp, 500);
+        return;
+      }
+      
+      if (isAuthenticated) {
+        // User is logged in, go to main app
+        router.replace('/(tabs)');
+      } else {
+        // User is not logged in, go to onboarding
+        router.replace('/onboarding');
+      }
     }, 1500);
   };
 

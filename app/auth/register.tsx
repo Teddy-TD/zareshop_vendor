@@ -9,7 +9,8 @@ import { styles } from './register.styles';
 import CustomButton from '@/components/CustomButton';
 import { useLoginMutation, useRegisterVendorOwnerMutation, useVerifyOtpMutation } from '@/services/authApi';
 import { useAppDispatch } from '@/store/hooks';
-import { setCredentials } from '@/features/auth/authSlice';
+import { setCredentialsAndPersist } from '@/features/auth/authSlice';
+import { useGetUserVendorStatusQuery } from '@/services/applicationApi';
 
 export default function RegisterScreen() {
   const dispatch = useAppDispatch();
@@ -25,6 +26,41 @@ export default function RegisterScreen() {
   const [registerVendor, { isLoading: isRegistering }] = useRegisterVendorOwnerMutation();
   const [verifyOtp, { isLoading: isVerifying }] = useVerifyOtpMutation();
   const [login, { isLoading: isLoggingIn }] = useLoginMutation();
+  const { data: vendorStatusData, refetch: refetchVendorStatus } = useGetUserVendorStatusQuery(undefined, {
+    skip: true // Skip initial fetch, we'll call it manually
+  });
+
+  const checkVendorStatusAndRoute = async () => {
+    try {
+      console.log('🔍 Checking vendor status...');
+      const result = await refetchVendorStatus();
+      
+      if (result.data) {
+        const { hasVendor, vendor } = result.data;
+        
+        if (!hasVendor) {
+          console.log('🔍 No vendor found, redirecting to application');
+          router.replace('/auth/application');
+        } else if (vendor && !vendor.isApproved) {
+          console.log('🔍 Vendor exists but not approved, redirecting to pending approval');
+          router.replace('/auth/pending-approval');
+        } else if (vendor && vendor.isApproved) {
+          console.log('🔍 Vendor approved, redirecting to main app');
+          router.replace('/(tabs)');
+        } else {
+          console.log('🔍 Unknown vendor status, redirecting to application');
+          router.replace('/auth/application');
+        }
+      } else {
+        console.log('🔍 Could not fetch vendor status, redirecting to application');
+        router.replace('/auth/application');
+      }
+    } catch (error) {
+      console.error('Error checking vendor status:', error);
+      // If there's an error, redirect to application as fallback
+      router.replace('/auth/application');
+    }
+  };
 
   const updateFormData = (key: string, value: string) => {
     setFormData(prev => ({ ...prev, [key]: value }));
@@ -84,8 +120,18 @@ export default function RegisterScreen() {
     try {
       await verifyOtp({ phone_number: formData.phoneNumber, code: formData.otpCode }).unwrap();
       const loggedIn = await login({ phone_number: formData.phoneNumber, password: formData.password }).unwrap();
-      dispatch(setCredentials({ user: loggedIn.user ?? null, token: loggedIn.token }));
-      router.replace('/');
+      
+      if (loggedIn.token) {
+        await dispatch(setCredentialsAndPersist({ 
+          user: loggedIn.user, 
+          token: loggedIn.token 
+        })).unwrap();
+        
+        // Check vendor status and route accordingly
+        await checkVendorStatusAndRoute();
+      } else {
+        Alert.alert('Error', 'Login failed after OTP verification.');
+      }
     } catch (e: any) {
       Alert.alert('Error', e?.data?.message || 'OTP verification or login failed.');
     }

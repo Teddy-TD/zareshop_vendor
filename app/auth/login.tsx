@@ -1,3 +1,8 @@
+import { useLoginMutation } from '@/services/authApi';
+import {  useGetUserVendorStatusQuery } from '@/services/applicationApi';
+import { useAppDispatch } from '@/store/hooks';
+import { setCredentialsAndPersist } from '@/features/auth/authSlice';
+import { extractUserFromToken } from '@/utils/jwtUtils';
 import React, { useState, useRef } from 'react';
 import {
   View,
@@ -13,20 +18,57 @@ import { ArrowLeft, Phone, Lock } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { COLORS, SIZES } from '@/constants/theme';
 import CustomButton from '@/components/CustomButton';
-import { useLoginMutation } from '@/services/authApi';
-import { useAppDispatch } from '@/store/hooks';
-import { setCredentials } from '@/features/auth/authSlice';
 
 export default function LoginScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
+  const [userId, setUserId] = useState<string | null>(null); // Track user ID after login
+
   const phoneInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
-  
+
   const dispatch = useAppDispatch();
   const [login] = useLoginMutation();
+  const { data: vendorStatusData, isLoading: vendorStatusLoading, error: vendorStatusError } =
+    useGetUserVendorStatusQuery(undefined, {
+      skip: !userId, // Only run the query when userId is available
+    });
+
+  const checkVendorStatusAndRoute = async () => {
+    if (vendorStatusLoading) {
+      console.log('🔍 Vendor status is still loading...');
+      return;
+    }
+
+    if (vendorStatusError) {
+      console.error('Error checking vendor status:', vendorStatusError);
+      Alert.alert('Error', 'Could not fetch vendor status. Redirecting to application.');
+      router.replace('/auth/application');
+      return;
+    }
+
+    if (vendorStatusData) {
+      const { hasVendor, vendor } = vendorStatusData;
+
+      if (!hasVendor) {
+        console.log('🔍 No vendor found, redirecting to application');
+        router.replace('/auth/application');
+      } else if (vendor && !vendor.isApproved) {
+        console.log('🔍 Vendor exists but not approved, redirecting to pending approval');
+        router.replace('/auth/pending-approval');
+      } else if (vendor && vendor.isApproved) {
+        console.log('🔍 Vendor approved, redirecting to main app');
+        router.replace('/(tabs)');
+      } else {
+        console.log('🔍 Unknown vendor status, redirecting to application');
+        router.replace('/auth/application');
+      }
+    } else {
+      console.log('🔍 No vendor status data, redirecting to application');
+      router.replace('/auth/application');
+    }
+  };
 
   const handleLogin = async () => {
     if (!phoneNumber || phoneNumber.length < 10) {
@@ -40,32 +82,71 @@ export default function LoginScreen() {
     }
 
     setIsLoading(true);
-    
+
     try {
       const result = await login({ phone_number: phoneNumber, password }).unwrap();
-      
+
+      console.log('🔍 Login response:', JSON.stringify(result, null, 2));
+      console.log('🔍 Token:', result.token);
+      console.log('🔍 User:', result.user);
+      console.log('🔍 Response keys:', Object.keys(result));
+
       if (result.token) {
-        // Store credentials in Redux store
-        dispatch(setCredentials({
-          user: result.user || { id: '', email: '', name: '' },
-          token: result.token
-        }));
-        
-        // Navigate to main app
-        router.replace('/auth/application');
+        let userData;
+
+        if (result.user && result.user.id) {
+          console.log('🔍 Using user data from login response:', result.user);
+          userData = result.user;
+        } else {
+          console.log('⚠️ No user data in login response, extracting from token');
+          const tokenUser = extractUserFromToken(result.token);
+          console.log('🔍 Extracted from token:', tokenUser);
+
+          if (tokenUser) {
+            userData = {
+              id: tokenUser.id,
+              name: '',
+              phone_number: phoneNumber,
+              type: tokenUser.type,
+              is_verified: false,
+              isotpVerified: false,
+            };
+            console.log('🔍 Created user from token:', userData);
+          } else {
+            throw new Error('Could not extract user from token');
+          }
+        }
+
+        // Store credentials in Redux store and persist to storage
+        await dispatch(
+          setCredentialsAndPersist({
+            user: userData,
+            token: result.token,
+          })
+        ).unwrap();
+
+        // Set userId to trigger vendor status query
+        setUserId(userData.id);
       } else {
         Alert.alert('Error', 'Login failed. Please try again.');
       }
     } catch (error: any) {
       console.error('Login error:', error);
       Alert.alert(
-        'Login Failed', 
+        'Login Failed',
         error?.data?.message || 'Invalid phone number or password. Please try again.'
       );
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Trigger routing after vendor status is fetched
+  React.useEffect(() => {
+    if (userId) {
+      checkVendorStatusAndRoute();
+    }
+  }, [userId, vendorStatusData, vendorStatusLoading, vendorStatusError]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -147,7 +228,6 @@ export default function LoginScreen() {
     </SafeAreaView>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,

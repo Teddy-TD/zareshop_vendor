@@ -37,6 +37,19 @@ type CategoriesResponse = Category[];
 
 type SubscriptionsResponse = Subscription[];
 
+type VendorStatusResponse = {
+  hasVendor: boolean;
+  vendor?: {
+    id: number;
+    name: string;
+    type: 'individual' | 'business';
+    isApproved: boolean;
+    status: boolean;
+    createdAt: string;
+  };
+  message?: string;
+};
+
 export const applicationApi = baseApi.injectEndpoints({
     endpoints: (build) => ({
         createIndividualVendor: build.mutation<CreateVendorResponse, CreateVendorOwnerRequest>({
@@ -69,6 +82,13 @@ export const applicationApi = baseApi.injectEndpoints({
             }),
             providesTags: ['Subscriptions'],
         }),
+        getUserVendorStatus: build.query<VendorStatusResponse, void>({
+            query: () => ({
+                url: '/vendors/my-status',
+                method: 'GET',
+            }),
+            providesTags: ['VendorStatus'],
+        }),
     }),
     overrideExisting: true,
 });
@@ -77,7 +97,8 @@ export const {
     useCreateIndividualVendorMutation, 
     useCreateBusinessVendorMutation,
     useGetCategoriesQuery, 
-    useGetSubscriptionsQuery 
+    useGetSubscriptionsQuery,
+    useGetUserVendorStatusQuery,
 } = applicationApi;
 
 

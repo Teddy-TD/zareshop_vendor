@@ -12,8 +12,12 @@ import {
 import { User, Store, Clock, MapPin, Phone, Mail, Settings, CircleHelp as HelpCircle, LogOut, ChevronRight, Camera } from 'lucide-react-native';
 import { COLORS, SIZES } from '@/constants/theme';
 import AnimatedCard from '@/components/AnimatedCard';
+import { useAuth } from '@/hooks/useAuth';
+import AuthDebug from '@/components/AuthDebug';
 
 export default function Profile() {
+  const { user, logout } = useAuth();
+  
   const MenuSection = ({ title, items, delay = 0 }: { 
     title: string; 
     items: Array<{ 
@@ -90,8 +94,8 @@ export default function Profile() {
               </TouchableOpacity>
             </View>
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>John's Electronics</Text>
-              <Text style={styles.profileType}>Individual Vendor</Text>
+              <Text style={styles.profileName}>{user?.name || 'Vendor'}</Text>
+              <Text style={styles.profileType}>{user?.type === 'vendor_owner' ? 'Vendor Owner' : 'Vendor'}</Text>
               <View style={styles.statusBadge}>
                 <View style={styles.statusDot} />
                 <Text style={styles.statusText}>Active</Text>
@@ -150,13 +154,13 @@ export default function Profile() {
             {
               icon: Phone,
               label: 'Phone Number',
-              value: '+251 91 123 4567',
+              value: user?.phone_number || 'Not provided',
               onPress: () => {},
             },
             {
               icon: Mail,
               label: 'Email Address',
-              value: 'john@electronics.com',
+              value: user?.email || 'Not provided',
               onPress: () => {},
             },
           ]}
@@ -194,11 +198,14 @@ export default function Profile() {
               icon: LogOut,
               label: 'Logout',
               color: COLORS.error,
-              onPress: () => {},
+              onPress: logout,
             },
           ]}
         />
 
+        {/* Debug Info - Remove this in production */}
+        <AuthDebug />
+        
         <View style={styles.bottomPadding} />
       </ScrollView>
     </SafeAreaView>

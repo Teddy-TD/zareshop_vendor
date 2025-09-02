@@ -56,6 +56,7 @@ export default function ApplicationScreen() {
         allowsEditing: true,
         aspect: [16, 9],
         quality: 0.8,
+        base64: false, // Don't return base64, return file URI instead
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -165,25 +166,33 @@ export default function ApplicationScreen() {
         
         // Append actual files
         if (coverImage) {
+          console.log('🔍 Appending cover_image:', coverImage);
           formData.append('cover_image', {
             uri: coverImage.uri,
             type: 'image/jpeg',
             name: 'cover_image.jpg'
           } as any);
+        } else {
+          console.log('❌ No cover_image selected');
         }
         
         if (faydaImage) {
+          console.log('🔍 Appending fayda_image:', faydaImage);
           formData.append('fayda_image', {
             uri: faydaImage.uri,
             type: 'image/jpeg',
             name: 'fayda_image.jpg'
           } as any);
+        } else {
+          console.log('❌ No fayda_image selected');
         }
         
         formData.append('user_id', user.id);
         formData.append('category_ids', `[${selectedCategory}]`);
         formData.append('payment_method', paymentMethodJSON);
         formData.append('subscription_id', selectedSubscription);
+        
+        console.log('🔍 FormData created with all fields');
 
         const result = await createIndividualVendor(formData).unwrap();
         console.log('Individual vendor result:', result);
@@ -209,25 +218,33 @@ export default function ApplicationScreen() {
         formData.append('name', name.trim());
         
         if (coverImage) {
+          console.log('🔍 Appending cover_image:', coverImage);
           formData.append('cover_image', {
             uri: coverImage.uri,
             type: 'image/jpeg',
             name: 'cover_image.jpg'
           } as any);
+        } else {
+          console.log('❌ No cover_image selected');
         }
         
         if (businessLicenseImage) {
+          console.log('🔍 Appending business_license_image:', businessLicenseImage);
           formData.append('business_license_image', {
             uri: businessLicenseImage.uri,
             type: 'image/jpeg',
             name: 'business_license_image.jpg'
           } as any);
+        } else {
+          console.log('❌ No business_license_image selected');
         }
         
         formData.append('user_id', user.id);
         formData.append('category_ids', `[${selectedCategory}]`);
         formData.append('payment_method', paymentMethodJSON);
         formData.append('subscription_id', selectedSubscription);
+        
+        console.log('🔍 FormData created with all fields');
 
         const result = await createBusinessVendor(formData).unwrap();
         console.log('Business vendor result:', result);
@@ -517,13 +534,17 @@ export default function ApplicationScreen() {
 
         {/* Submit Button */}
         <View style={styles.submitSection}>
-          <CustomButton
-            title="Submit Application"
-            onPress={handleSubmit}
-            loading={isLoading}
-            style={styles.submitButton}
-          />
-        </View>
+  <CustomButton
+    title="Submit Application"
+    onPress={async () => {
+      await handleSubmit();  
+      router.replace('/auth/pending-approval');
+    }}
+    loading={isLoading}
+    style={styles.submitButton}
+  />
+</View>
+
       </ScrollView>
     </SafeAreaView>
   );
