@@ -10,6 +10,9 @@ export const COLORS = {
   success: '#27ae60',
   border: '#e1e8ed',
   card: '#f8f9fa',
+  lightGray: '#e1e8ed',
+  red: '#e74c3c',
+  textGray: '#666666',
 };
 
 export const SIZES = {
@@ -21,6 +24,8 @@ export const SIZES = {
   xxl: 48,
   radius: 12,
   cardRadius: 16,
+  padding: 16,
+  base: 8,
 };
 
 export const FONTS = {

@@ -8,7 +8,7 @@ export const baseApi = createApi({
 			return headers;
 		},
 	}),
-	tagTypes: ['Auth', 'Products', 'Orders', 'Payouts', 'Profile', 'Notifications'],
+	tagTypes: ['Auth', 'Application', 'Products', 'Orders', 'Payouts', 'Profile', 'Notifications', 'Categories', 'Subscriptions'],
 	endpoints: () => ({}),
 });
 

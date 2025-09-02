@@ -52,7 +52,7 @@ export default function LoginScreen() {
         }));
         
         // Navigate to main app
-        router.replace('/(tabs)');
+        router.replace('/auth/application');
       } else {
         Alert.alert('Error', 'Login failed. Please try again.');
       }
