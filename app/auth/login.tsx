@@ -13,48 +13,58 @@ import { ArrowLeft, Phone, Lock } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { COLORS, SIZES } from '@/constants/theme';
 import CustomButton from '@/components/CustomButton';
+import { useLoginMutation } from '@/services/authApi';
+import { useAppDispatch } from '@/store/hooks';
+import { setCredentials } from '@/features/auth/authSlice';
 
 export default function LoginScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [otp, setOtp] = useState('');
-  const [isOtpSent, setIsOtpSent] = useState(false);
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
   const phoneInputRef = useRef<TextInput>(null);
-  const otpInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+  
+  const dispatch = useAppDispatch();
+  const [login] = useLoginMutation();
 
-  const handleSendOtp = async () => {
+  const handleLogin = async () => {
     if (!phoneNumber || phoneNumber.length < 10) {
       Alert.alert('Error', 'Please enter a valid phone number');
       return;
     }
 
-    setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-      setIsOtpSent(true);
-      otpInputRef.current?.focus();
-      Alert.alert('Success', 'OTP sent to your phone number');
-    }, 2000);
-  };
-
-  const handleVerifyOtp = async () => {
-    if (!otp || otp.length < 4) {
-      Alert.alert('Error', 'Please enter the 4-digit OTP');
+    if (!password || password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters');
       return;
     }
 
     setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+    
+    try {
+      const result = await login({ phone_number: phoneNumber, password }).unwrap();
+      
+      if (result.token) {
+        // Store credentials in Redux store
+        dispatch(setCredentials({
+          user: result.user || { id: '', email: '', name: '' },
+          token: result.token
+        }));
+        
+        // Navigate to main app
+        router.replace('/(tabs)');
+      } else {
+        Alert.alert('Error', 'Login failed. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
+      Alert.alert(
+        'Login Failed', 
+        error?.data?.message || 'Invalid phone number or password. Please try again.'
+      );
+    } finally {
       setIsLoading(false);
-      router.replace('/(tabs)');
-    }, 2000);
-  };
-
-  const handleResendOtp = () => {
-    handleSendOtp();
+    }
   };
 
   return (
@@ -82,71 +92,48 @@ export default function LoginScreen() {
         <Text style={styles.subtitleText}>Sign in to your vendor account</Text>
       </View>
 
-      {/* Phone Number Input */}
-      {!isOtpSent && (
-        <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>Phone Number</Text>
-          <View style={styles.inputContainer}>
-            <Phone size={20} color={COLORS.textLight} />
-            <TextInput
-              ref={phoneInputRef}
-              style={styles.textInput}
-              placeholder="Enter your phone number"
-              value={phoneNumber}
-              onChangeText={setPhoneNumber}
-              keyboardType="phone-pad"
-              maxLength={10}
-            />
-          </View>
-          
-          <CustomButton
-            title="Send OTP"
-            onPress={handleSendOtp}
-            loading={isLoading}
-            style={styles.sendOtpButton}
+      {/* Login Form */}
+      <View style={styles.inputSection}>
+        {/* Phone Number Input */}
+        <Text style={styles.inputLabel}>Phone Number</Text>
+        <View style={styles.inputContainer}>
+          <Phone size={20} color={COLORS.textLight} />
+          <TextInput
+            ref={phoneInputRef}
+            style={styles.textInput}
+            placeholder="Enter your phone number"
+            value={phoneNumber}
+            onChangeText={setPhoneNumber}
+            keyboardType="phone-pad"
+            maxLength={10}
+            autoCapitalize="none"
+            autoCorrect={false}
           />
         </View>
-      )}
 
-      {/* OTP Input */}
-      {isOtpSent && (
-        <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>Enter OTP</Text>
-          <Text style={styles.otpSubtext}>
-            We've sent a 4-digit code to {phoneNumber}
-          </Text>
-          
-          <View style={styles.otpContainer}>
-            <TextInput
-              ref={otpInputRef}
-              style={styles.otpInput}
-              placeholder="0000"
-              value={otp}
-              onChangeText={setOtp}
-              keyboardType="number-pad"
-              maxLength={4}
-              textAlign="center"
-            />
-          </View>
-
-          <CustomButton
-            title="Verify OTP"
-            onPress={handleVerifyOtp}
-            loading={isLoading}
-            style={styles.verifyOtpButton}
+        {/* Password Input */}
+        <Text style={styles.inputLabel}>Password</Text>
+        <View style={styles.inputContainer}>
+          <Lock size={20} color={COLORS.textLight} />
+          <TextInput
+            ref={passwordInputRef}
+            style={styles.textInput}
+            placeholder="Enter your password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
           />
-
-          <TouchableOpacity 
-            style={styles.resendContainer}
-            onPress={handleResendOtp}
-            disabled={isLoading}
-          >
-            <Text style={styles.resendText}>
-              Didn't receive the code? <Text style={styles.resendLink}>Resend</Text>
-            </Text>
-          </TouchableOpacity>
         </View>
-      )}
+        
+        <CustomButton
+          title="Sign In"
+          onPress={handleLogin}
+          loading={isLoading}
+          style={styles.loginButton}
+        />
+      </View>
 
       {/* Footer */}
       <View style={styles.footer}>
@@ -240,43 +227,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.text,
   },
-  sendOtpButton: {
-    marginBottom: SIZES.lg,
-  },
-  otpSubtext: {
-    fontSize: 14,
-    color: COLORS.textLight,
-    marginBottom: SIZES.lg,
-    textAlign: 'center',
-  },
-  otpContainer: {
-    alignItems: 'center',
-    marginBottom: SIZES.lg,
-  },
-  otpInput: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    backgroundColor: COLORS.card,
-    borderRadius: SIZES.radius,
-    paddingHorizontal: SIZES.lg,
-    paddingVertical: SIZES.md,
-    width: 120,
-    textAlign: 'center',
-  },
-  verifyOtpButton: {
-    marginBottom: SIZES.lg,
-  },
-  resendContainer: {
-    alignItems: 'center',
-  },
-  resendText: {
-    fontSize: 14,
-    color: COLORS.textLight,
-  },
-  resendLink: {
-    color: COLORS.primary,
-    fontWeight: '600',
+  loginButton: {
+    marginTop: SIZES.md,
   },
   footer: {
     flex: 1,
