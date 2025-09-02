@@ -1,38 +1,30 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  StatusBar,
-  TouchableOpacity,
-  TextInput,
-  ScrollView,
-  Alert,
-  Switch,
-} from 'react-native';
-import { ArrowLeft, User, Building, Camera, Upload, MapPin, Phone, Mail } from 'lucide-react-native';
+import { View, Text, SafeAreaView, StatusBar, TouchableOpacity, TextInput, ScrollView, Alert } from 'react-native';
+import { ArrowLeft, User, Phone } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'react-native';
 import { router } from 'expo-router';
 import { COLORS, SIZES } from '@/constants/theme';
+import { styles } from './register.styles';
 import CustomButton from '@/components/CustomButton';
+import { useLoginMutation, useRegisterVendorOwnerMutation, useVerifyOtpMutation } from '@/services/authApi';
+import { useAppDispatch } from '@/store/hooks';
+import { setCredentials } from '@/features/auth/authSlice';
 
 export default function RegisterScreen() {
+  const dispatch = useAppDispatch();
   const [step, setStep] = useState(1);
-  const [vendorType, setVendorType] = useState<'individual' | 'business'>('individual');
   const [formData, setFormData] = useState({
     fullName: '',
     phoneNumber: '',
     email: '',
-    storeName: '',
-    storeDescription: '',
-    address: '',
-    city: '',
-    businessLicense: '',
-    faydaId: '',
-    paymentMethod: '',
-    accountNumber: '',
+    password: '',
+    otpCode: '',
   });
-  const [isLoading, setIsLoading] = useState(false);
+  const [picture, setPicture] = useState<{ uri: string; name: string; type: string } | null>(null);
+  const [registerVendor, { isLoading: isRegistering }] = useRegisterVendorOwnerMutation();
+  const [verifyOtp, { isLoading: isVerifying }] = useVerifyOtpMutation();
+  const [login, { isLoading: isLoggingIn }] = useLoginMutation();
 
   const updateFormData = (key: string, value: string) => {
     setFormData(prev => ({ ...prev, [key]: value }));
@@ -40,52 +32,69 @@ export default function RegisterScreen() {
 
   const handleNext = () => {
     if (step === 1) {
-      if (!formData.fullName || !formData.phoneNumber || !formData.email) {
+      if (!formData.fullName || !formData.phoneNumber || !formData.password) {
         Alert.alert('Error', 'Please fill in all required fields');
-        return;
-      }
-      setStep(2);
-    } else if (step === 2) {
-      if (!formData.storeName || !formData.storeDescription || !formData.address) {
-        Alert.alert('Error', 'Please fill in all required fields');
-        return;
-      }
-      setStep(3);
-    } else if (step === 3) {
-      if (vendorType === 'business' && !formData.businessLicense) {
-        Alert.alert('Error', 'Please upload business license');
-        return;
-      }
-      if (vendorType === 'individual' && !formData.faydaId) {
-        Alert.alert('Error', 'Please upload Fayda ID');
         return;
       }
       handleSubmit();
+    } else if (step === 2) {
+      handleVerifyOtp();
     }
   };
 
   const handleSubmit = async () => {
-    setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-      Alert.alert(
-        'Registration Submitted',
-        'Your vendor account has been submitted for admin approval. You will be notified once approved.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/auth/pending-approval')
-          }
-        ]
-      );
-    }, 2000);
+    try {
+      await registerVendor({
+        name: formData.fullName,
+        phone_number: formData.phoneNumber,
+        password: formData.password,
+        email: formData.email || undefined,
+        picture: picture || undefined,
+      }).unwrap();
+      setStep(2);
+    } catch (e: any) {
+      Alert.alert('Error', e?.data?.message || 'Failed to register.');
+    }
+  };
+
+  const pickImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permission.status !== 'granted') {
+      Alert.alert('Permission required', 'We need media library permission to select a picture.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const asset = result.assets[0];
+      const fileName = asset.fileName || `profile_${Date.now()}.jpg`;
+      const mimeType = asset.mimeType || 'image/jpeg';
+      setPicture({ uri: asset.uri, name: fileName, type: mimeType });
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!formData.otpCode) {
+      Alert.alert('Error', 'Enter the OTP code sent to your phone');
+      return;
+    }
+    try {
+      await verifyOtp({ phone_number: formData.phoneNumber, code: formData.otpCode }).unwrap();
+      const loggedIn = await login({ phone_number: formData.phoneNumber, password: formData.password }).unwrap();
+      dispatch(setCredentials({ user: loggedIn.user ?? null, token: loggedIn.token }));
+      router.replace('/');
+    } catch (e: any) {
+      Alert.alert('Error', e?.data?.message || 'OTP verification or login failed.');
+    }
   };
 
   const renderStep1 = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Basic Information</Text>
-      <Text style={styles.stepSubtitle}>Tell us about yourself</Text>
+      <Text style={styles.stepSubtitle}>Create your account</Text>
       
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Full Name *</Text>
@@ -116,12 +125,11 @@ export default function RegisterScreen() {
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Email Address *</Text>
+        <Text style={styles.inputLabel}>Email (optional)</Text>
         <View style={styles.inputContainer}>
-          <Mail size={20} color={COLORS.textLight} />
           <TextInput
             style={styles.textInput}
-            placeholder="Enter your email address"
+            placeholder="Enter your email"
             value={formData.email}
             onChangeText={(value) => updateFormData('email', value)}
             keyboardType="email-address"
@@ -129,152 +137,59 @@ export default function RegisterScreen() {
           />
         </View>
       </View>
+
+      {/* Only phone number, name and password required */}
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Password *</Text>
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.textInput}
+            placeholder="Enter a strong password"
+            value={formData.password}
+            onChangeText={(value) => updateFormData('password', value)}
+            secureTextEntry
+            autoCapitalize="none"
+          />
+        </View>
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Profile Picture (optional)</Text>
+        <View style={styles.inputContainer}>
+          <CustomButton title={picture ? 'Change Picture' : 'Upload Picture'} onPress={pickImage} />
+        </View>
+        {picture && (
+          <View style={{ marginTop: SIZES.sm }}>
+            <Image source={{ uri: picture.uri }} style={{ width: 80, height: 80, borderRadius: 8 }} />
+          </View>
+        )}
+      </View>
     </View>
   );
 
   const renderStep2 = () => (
     <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>Store Information</Text>
-      <Text style={styles.stepSubtitle}>Tell us about your business</Text>
-      
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Store Name *</Text>
-        <View style={styles.inputContainer}>
-          <Building size={20} color={COLORS.textLight} />
-          <TextInput
-            style={styles.textInput}
-            placeholder="Enter your store name"
-            value={formData.storeName}
-            onChangeText={(value) => updateFormData('storeName', value)}
-          />
-        </View>
-      </View>
+      <Text style={styles.stepTitle}>Verify Phone</Text>
+      <Text style={styles.stepSubtitle}>Enter the OTP sent to {formData.phoneNumber}</Text>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Store Description *</Text>
+        <Text style={styles.inputLabel}>OTP Code *</Text>
         <View style={styles.inputContainer}>
-          <TextInput
-            style={[styles.textInput, styles.textArea]}
-            placeholder="Describe your store and what you sell"
-            value={formData.storeDescription}
-            onChangeText={(value) => updateFormData('storeDescription', value)}
-            multiline
-            numberOfLines={3}
-            textAlignVertical="top"
-          />
-        </View>
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Address *</Text>
-        <View style={styles.inputContainer}>
-          <MapPin size={20} color={COLORS.textLight} />
           <TextInput
             style={styles.textInput}
-            placeholder="Enter your store address"
-            value={formData.address}
-            onChangeText={(value) => updateFormData('address', value)}
-          />
-        </View>
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>City</Text>
-        <View style={styles.inputContainer}>
-          <MapPin size={20} color={COLORS.textLight} />
-          <TextInput
-            style={styles.textInput}
-            placeholder="Enter your city"
-            value={formData.city}
-            onChangeText={(value) => updateFormData('city', value)}
+            placeholder="6-digit code"
+            value={formData.otpCode}
+            onChangeText={(value) => updateFormData('otpCode', value)}
+            keyboardType="number-pad"
+            maxLength={6}
           />
         </View>
       </View>
     </View>
   );
 
-  const renderStep3 = () => (
-    <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>Verification & Payment</Text>
-      <Text style={styles.stepSubtitle}>Complete your setup</Text>
-      
-      {/* Vendor Type Selection */}
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Vendor Type</Text>
-        <View style={styles.vendorTypeContainer}>
-          <TouchableOpacity
-            style={[
-              styles.vendorTypeButton,
-              vendorType === 'individual' && styles.vendorTypeButtonActive
-            ]}
-            onPress={() => setVendorType('individual')}
-          >
-            <User size={20} color={vendorType === 'individual' ? COLORS.white : COLORS.textLight} />
-            <Text style={[
-              styles.vendorTypeText,
-              vendorType === 'individual' && styles.vendorTypeTextActive
-            ]}>
-              Individual
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[
-              styles.vendorTypeButton,
-              vendorType === 'business' && styles.vendorTypeButtonActive
-            ]}
-            onPress={() => setVendorType('business')}
-          >
-            <Building size={20} color={vendorType === 'business' ? COLORS.white : COLORS.textLight} />
-            <Text style={[
-              styles.vendorTypeText,
-              vendorType === 'business' && styles.vendorTypeTextActive
-            ]}>
-              Business
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Document Upload */}
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>
-          {vendorType === 'business' ? 'Business License *' : 'Fayda ID *'}
-        </Text>
-        <TouchableOpacity style={styles.uploadButton}>
-          <Upload size={20} color={COLORS.primary} />
-          <Text style={styles.uploadText}>
-            {vendorType === 'business' ? 'Upload Business License' : 'Upload Fayda ID'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Payment Details */}
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Payment Method</Text>
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.textInput}
-            placeholder="Bank Transfer / Mobile Money"
-            value={formData.paymentMethod}
-            onChangeText={(value) => updateFormData('paymentMethod', value)}
-          />
-        </View>
-      </View>
-
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Account Number</Text>
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.textInput}
-            placeholder="Enter account number"
-            value={formData.accountNumber}
-            onChangeText={(value) => updateFormData('accountNumber', value)}
-          />
-        </View>
-      </View>
-    </View>
-  );
+  // removed legacy step 3 (business/individual and payment) per backend requirements
 
   return (
     <SafeAreaView style={styles.container}>
@@ -295,16 +210,15 @@ export default function RegisterScreen() {
       {/* Progress Bar */}
       <View style={styles.progressContainer}>
         <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${(step / 3) * 100}%` }]} />
+          <View style={[styles.progressFill, { width: `${(step / 2) * 100}%` }]} />
         </View>
-        <Text style={styles.progressText}>Step {step} of 3</Text>
+        <Text style={styles.progressText}>Step {step} of 2</Text>
       </View>
 
       {/* Step Content */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {step === 1 && renderStep1()}
         {step === 2 && renderStep2()}
-        {step === 3 && renderStep3()}
       </ScrollView>
 
       {/* Navigation */}
@@ -319,162 +233,12 @@ export default function RegisterScreen() {
         )}
         
         <CustomButton
-          title={step === 3 ? 'Submit Application' : 'Next'}
+          title={step === 1 ? 'Register' : 'Verify & Login'}
           onPress={handleNext}
-          loading={isLoading}
+          loading={isRegistering || isVerifying || isLoggingIn}
           style={styles.nextButton}
         />
       </View>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.white,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: SIZES.md,
-    paddingTop: SIZES.lg,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  progressContainer: {
-    paddingHorizontal: SIZES.md,
-    paddingBottom: SIZES.lg,
-  },
-  progressBar: {
-    height: 4,
-    backgroundColor: COLORS.border,
-    borderRadius: 2,
-    marginBottom: SIZES.sm,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: COLORS.primary,
-    borderRadius: 2,
-  },
-  progressText: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    textAlign: 'center',
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: SIZES.md,
-  },
-  stepContainer: {
-    paddingBottom: SIZES.xl,
-  },
-  stepTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: SIZES.xs,
-  },
-  stepSubtitle: {
-    fontSize: 16,
-    color: COLORS.textLight,
-    marginBottom: SIZES.lg,
-  },
-  inputGroup: {
-    marginBottom: SIZES.lg,
-  },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: SIZES.sm,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.card,
-    borderRadius: SIZES.radius,
-    paddingHorizontal: SIZES.md,
-    paddingVertical: SIZES.md,
-  },
-  textInput: {
-    flex: 1,
-    marginLeft: SIZES.sm,
-    fontSize: 16,
-    color: COLORS.text,
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
-  },
-  vendorTypeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  vendorTypeButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.card,
-    borderRadius: SIZES.radius,
-    paddingVertical: SIZES.md,
-    paddingHorizontal: SIZES.md,
-    marginHorizontal: SIZES.xs,
-  },
-  vendorTypeButtonActive: {
-    backgroundColor: COLORS.primary,
-  },
-  vendorTypeText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.textLight,
-  },
-  vendorTypeTextActive: {
-    color: COLORS.white,
-  },
-  uploadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.card,
-    borderRadius: SIZES.radius,
-    paddingVertical: SIZES.lg,
-    paddingHorizontal: SIZES.md,
-    borderWidth: 2,
-    borderColor: COLORS.border,
-    borderStyle: 'dashed',
-  },
-  uploadText: {
-    marginLeft: SIZES.sm,
-    fontSize: 16,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  navigation: {
-    flexDirection: 'row',
-    padding: SIZES.md,
-    alignItems: 'center',
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: COLORS.textLight,
-    fontWeight: '600',
-    paddingHorizontal: SIZES.md,
-  },
-  nextButton: {
-    flex: 1,
-  },
-});
