@@ -1,3 +1,8 @@
+import { useLoginMutation } from '@/services/authApi';
+import {  useGetUserVendorStatusQuery } from '@/services/applicationApi';
+import { useAppDispatch } from '@/store/hooks';
+import { setCredentialsAndPersist } from '@/features/auth/authSlice';
+import { extractUserFromToken } from '@/utils/jwtUtils';
 import React, { useState, useRef } from 'react';
 import {
   View,
@@ -16,46 +21,132 @@ import CustomButton from '@/components/CustomButton';
 
 export default function LoginScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [otp, setOtp] = useState('');
-  const [isOtpSent, setIsOtpSent] = useState(false);
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
-  const phoneInputRef = useRef<TextInput>(null);
-  const otpInputRef = useRef<TextInput>(null);
+  const [userId, setUserId] = useState<string | null>(null); // Track user ID after login
 
-  const handleSendOtp = async () => {
+  const phoneInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+
+  const dispatch = useAppDispatch();
+  const [login] = useLoginMutation();
+  const { data: vendorStatusData, isLoading: vendorStatusLoading, error: vendorStatusError } =
+    useGetUserVendorStatusQuery(undefined, {
+      skip: !userId, // Only run the query when userId is available
+    });
+
+  const checkVendorStatusAndRoute = async () => {
+    if (vendorStatusLoading) {
+      console.log('🔍 Vendor status is still loading...');
+      return;
+    }
+
+    if (vendorStatusError) {
+      console.error('Error checking vendor status:', vendorStatusError);
+      Alert.alert('Error', 'Could not fetch vendor status. Redirecting to application.');
+      router.replace('/auth/application');
+      return;
+    }
+
+    if (vendorStatusData) {
+      const { hasVendor, vendor } = vendorStatusData;
+
+      if (!hasVendor) {
+        console.log('🔍 No vendor found, redirecting to application');
+        router.replace('/auth/application');
+      } else if (vendor && !vendor.isApproved) {
+        console.log('🔍 Vendor exists but not approved, redirecting to pending approval');
+        router.replace('/auth/pending-approval');
+      } else if (vendor && vendor.isApproved) {
+        console.log('🔍 Vendor approved, redirecting to main app');
+        router.replace('/(tabs)');
+      } else {
+        console.log('🔍 Unknown vendor status, redirecting to application');
+        router.replace('/auth/application');
+      }
+    } else {
+      console.log('🔍 No vendor status data, redirecting to application');
+      router.replace('/auth/application');
+    }
+  };
+
+  const handleLogin = async () => {
     if (!phoneNumber || phoneNumber.length < 10) {
       Alert.alert('Error', 'Please enter a valid phone number');
       return;
     }
 
-    setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-      setIsOtpSent(true);
-      otpInputRef.current?.focus();
-      Alert.alert('Success', 'OTP sent to your phone number');
-    }, 2000);
-  };
-
-  const handleVerifyOtp = async () => {
-    if (!otp || otp.length < 4) {
-      Alert.alert('Error', 'Please enter the 4-digit OTP');
+    if (!password || password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters');
       return;
     }
 
     setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+
+    try {
+      const result = await login({ phone_number: phoneNumber, password }).unwrap();
+
+      console.log('🔍 Login response:', JSON.stringify(result, null, 2));
+      console.log('🔍 Token:', result.token);
+      console.log('🔍 User:', result.user);
+      console.log('🔍 Response keys:', Object.keys(result));
+
+      if (result.token) {
+        let userData;
+
+        if (result.user && result.user.id) {
+          console.log('🔍 Using user data from login response:', result.user);
+          userData = result.user;
+        } else {
+          console.log('⚠️ No user data in login response, extracting from token');
+          const tokenUser = extractUserFromToken(result.token);
+          console.log('🔍 Extracted from token:', tokenUser);
+
+          if (tokenUser) {
+            userData = {
+              id: tokenUser.id,
+              name: '',
+              phone_number: phoneNumber,
+              type: tokenUser.type,
+              is_verified: false,
+              isotpVerified: false,
+            };
+            console.log('🔍 Created user from token:', userData);
+          } else {
+            throw new Error('Could not extract user from token');
+          }
+        }
+
+        // Store credentials in Redux store and persist to storage
+        await dispatch(
+          setCredentialsAndPersist({
+            user: userData,
+            token: result.token,
+          })
+        ).unwrap();
+
+        // Set userId to trigger vendor status query
+        setUserId(userData.id);
+      } else {
+        Alert.alert('Error', 'Login failed. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
+      Alert.alert(
+        'Login Failed',
+        error?.data?.message || 'Invalid phone number or password. Please try again.'
+      );
+    } finally {
       setIsLoading(false);
-      router.replace('/(tabs)');
-    }, 2000);
+    }
   };
 
-  const handleResendOtp = () => {
-    handleSendOtp();
-  };
+  // Trigger routing after vendor status is fetched
+  React.useEffect(() => {
+    if (userId) {
+      checkVendorStatusAndRoute();
+    }
+  }, [userId, vendorStatusData, vendorStatusLoading, vendorStatusError]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -82,71 +173,48 @@ export default function LoginScreen() {
         <Text style={styles.subtitleText}>Sign in to your vendor account</Text>
       </View>
 
-      {/* Phone Number Input */}
-      {!isOtpSent && (
-        <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>Phone Number</Text>
-          <View style={styles.inputContainer}>
-            <Phone size={20} color={COLORS.textLight} />
-            <TextInput
-              ref={phoneInputRef}
-              style={styles.textInput}
-              placeholder="Enter your phone number"
-              value={phoneNumber}
-              onChangeText={setPhoneNumber}
-              keyboardType="phone-pad"
-              maxLength={10}
-            />
-          </View>
-          
-          <CustomButton
-            title="Send OTP"
-            onPress={handleSendOtp}
-            loading={isLoading}
-            style={styles.sendOtpButton}
+      {/* Login Form */}
+      <View style={styles.inputSection}>
+        {/* Phone Number Input */}
+        <Text style={styles.inputLabel}>Phone Number</Text>
+        <View style={styles.inputContainer}>
+          <Phone size={20} color={COLORS.textLight} />
+          <TextInput
+            ref={phoneInputRef}
+            style={styles.textInput}
+            placeholder="Enter your phone number"
+            value={phoneNumber}
+            onChangeText={setPhoneNumber}
+            keyboardType="phone-pad"
+            maxLength={10}
+            autoCapitalize="none"
+            autoCorrect={false}
           />
         </View>
-      )}
 
-      {/* OTP Input */}
-      {isOtpSent && (
-        <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>Enter OTP</Text>
-          <Text style={styles.otpSubtext}>
-            We've sent a 4-digit code to {phoneNumber}
-          </Text>
-          
-          <View style={styles.otpContainer}>
-            <TextInput
-              ref={otpInputRef}
-              style={styles.otpInput}
-              placeholder="0000"
-              value={otp}
-              onChangeText={setOtp}
-              keyboardType="number-pad"
-              maxLength={4}
-              textAlign="center"
-            />
-          </View>
-
-          <CustomButton
-            title="Verify OTP"
-            onPress={handleVerifyOtp}
-            loading={isLoading}
-            style={styles.verifyOtpButton}
+        {/* Password Input */}
+        <Text style={styles.inputLabel}>Password</Text>
+        <View style={styles.inputContainer}>
+          <Lock size={20} color={COLORS.textLight} />
+          <TextInput
+            ref={passwordInputRef}
+            style={styles.textInput}
+            placeholder="Enter your password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
           />
-
-          <TouchableOpacity 
-            style={styles.resendContainer}
-            onPress={handleResendOtp}
-            disabled={isLoading}
-          >
-            <Text style={styles.resendText}>
-              Didn't receive the code? <Text style={styles.resendLink}>Resend</Text>
-            </Text>
-          </TouchableOpacity>
         </View>
-      )}
+        
+        <CustomButton
+          title="Sign In"
+          onPress={handleLogin}
+          loading={isLoading}
+          style={styles.loginButton}
+        />
+      </View>
 
       {/* Footer */}
       <View style={styles.footer}>
@@ -160,7 +228,6 @@ export default function LoginScreen() {
     </SafeAreaView>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -240,43 +307,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.text,
   },
-  sendOtpButton: {
-    marginBottom: SIZES.lg,
-  },
-  otpSubtext: {
-    fontSize: 14,
-    color: COLORS.textLight,
-    marginBottom: SIZES.lg,
-    textAlign: 'center',
-  },
-  otpContainer: {
-    alignItems: 'center',
-    marginBottom: SIZES.lg,
-  },
-  otpInput: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    backgroundColor: COLORS.card,
-    borderRadius: SIZES.radius,
-    paddingHorizontal: SIZES.lg,
-    paddingVertical: SIZES.md,
-    width: 120,
-    textAlign: 'center',
-  },
-  verifyOtpButton: {
-    marginBottom: SIZES.lg,
-  },
-  resendContainer: {
-    alignItems: 'center',
-  },
-  resendText: {
-    fontSize: 14,
-    color: COLORS.textLight,
-  },
-  resendLink: {
-    color: COLORS.primary,
-    fontWeight: '600',
+  loginButton: {
+    marginTop: SIZES.md,
   },
   footer: {
     flex: 1,
