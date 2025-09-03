@@ -17,13 +17,15 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     dispatch(restoreAuth());
   }, [dispatch]);
 
+  // Show loading screen while restoring auth state
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.white }}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.primary }}>
+        <ActivityIndicator size="large" color={COLORS.white} />
       </View>
     );
   }
 
   return <>{children}</>;
 }
+
