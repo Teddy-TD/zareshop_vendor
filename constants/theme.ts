@@ -1,27 +1,28 @@
 export const COLORS = {
-  primary: '#2ecc71',
-  secondary: '#a8e6cf',
-  background: '#ffffff',
-  text: '#333333',
-  textLight: '#666666',
-  white: '#ffffff',
-  error: '#e74c3c',
-  warning: '#f39c12',
-  success: '#27ae60',
-  border: '#e1e8ed',
-  card: '#f8f9fa',
-  lightGray: '#e1e8ed',
-  red: '#e74c3c',
-  textGray: '#666666',
+  primary: '#1B9C68',       // Darker, richer green (modern + trustworthy)
+  secondary: '#A8E6CF',     // Light mint accent (keeps freshness)
+  background: '#F9FAFB',    // Subtle off-white background
+  text: '#111827',          // Deep neutral text for readability
+  textLight: '#6B7280',     // Muted gray for secondary text
+  white: '#FFFFFF',
+  error: '#EF4444',         // Modern red (error state)
+  warning: '#F59E0B',       // Warm amber
+  success: '#16A34A',       // Clean green (used for success states)
+  border: '#E5E7EB',        // Neutral border
+  card: '#FFFFFF',          // Card stays white for elevation
+  lightGray: '#F3F4F6',     // Light gray for sections
+  red: '#EF4444',           // Unified red tone
+  textGray: '#6B7280',
+  danger: '#DC2626',        // Strong red for destructive actions
 };
 
 export const SIZES = {
   xs: 4,
   sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 32,
-  xxl: 48,
+  md: 12,
+  lg: 20,
+  xl: 28,
+  xxl: 40,
   radius: 12,
   cardRadius: 16,
   padding: 16,
@@ -31,5 +32,6 @@ export const SIZES = {
 export const FONTS = {
   regular: 'Inter-Regular',
   medium: 'Inter-Medium',
+  semiBold: 'Inter-SemiBold',
   bold: 'Inter-Bold',
 };

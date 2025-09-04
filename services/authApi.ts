@@ -38,6 +38,16 @@ type VerifyOtpResponse = {
 		type: string;
 	};
 };
+type ResendOtpResponse  = {
+	message : String;
+	user : {
+		id: string;
+		phone_number: string;
+		isotpVerified: boolean;
+		is_verified: boolean;
+		type: string;
+	}
+}
 
 type UserProfileResponse = {
 	id: string;
@@ -47,6 +57,33 @@ type UserProfileResponse = {
 	type: string;
 	is_verified: boolean;
 	isotpVerified: boolean;
+};
+
+type RequestPasswordResetRequest = {
+	phone_number: string;
+};
+
+type RequestPasswordResetResponse = {
+	message: string;
+};
+
+type VerifyResetOtpRequest = {
+	phone_number: string;
+	otp: string;
+};
+
+type VerifyResetOtpResponse = {
+	message: string;
+	resetToken: string;
+};
+
+type ResetPasswordRequest = {
+	new_password: string;
+	resetToken: string;
+};
+
+type ResetPasswordResponse = {
+	message: string;
 };
 
 export const authApi = baseApi.injectEndpoints({
@@ -80,6 +117,15 @@ export const authApi = baseApi.injectEndpoints({
 			}),
 			invalidatesTags: ['Auth'],
 		}),
+
+		resendOtp: build.mutation<ResendOtpResponse, { phone_number: string }>({
+			query: (body) => ({
+				url: '/auth/resend-otp',
+				method: 'POST',
+				body,
+			}),
+			invalidatesTags: ['Auth'],
+		}),
 		login: build.mutation<LoginResponse, { phone_number: string; password: string }>({
 			query: (body) => ({
 				url: '/auth/login',
@@ -94,6 +140,33 @@ export const authApi = baseApi.injectEndpoints({
 			}),
 			providesTags: ['Auth'],
 		}),
+
+		// Forgot password: request reset (send OTP/code)
+		requestPasswordReset: build.mutation<RequestPasswordResetResponse, RequestPasswordResetRequest>({
+			query: (body) => ({
+				url: '/auth/forgot-password', // This sends OTP
+				method: 'POST',
+				body,
+			}),
+		}),
+
+		// Forgot password: verify OTP and get reset token
+		verifyResetOtp: build.mutation<VerifyResetOtpResponse, VerifyResetOtpRequest>({
+			query: (body) => ({
+				url: '/auth/verify-reset-otp',
+				method: 'POST',
+				body,
+			}),
+		}),
+
+		// Forgot password: set new password using reset token
+		resetPassword: build.mutation<ResetPasswordResponse, ResetPasswordRequest>({
+			query: (body) => ({
+				url: '/auth/reset-password',
+				method: 'POST',
+				body,
+			}),
+		}),
 	}),
 	overrideExisting: false,
 });
@@ -102,7 +175,11 @@ export const {
 	useRegisterVendorOwnerMutation, 
 	useVerifyOtpMutation, 
 	useLoginMutation,
-	useGetUserProfileQuery
+	useGetUserProfileQuery,
+	useResendOtpMutation,
+	useRequestPasswordResetMutation,
+	useVerifyResetOtpMutation,
+	useResetPasswordMutation
 } = authApi;
 
 

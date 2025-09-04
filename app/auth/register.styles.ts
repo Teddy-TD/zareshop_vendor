@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
 import { COLORS, SIZES } from '@/constants/theme';
 
 export const styles = StyleSheet.create({
@@ -81,11 +81,28 @@ export const styles = StyleSheet.create({
 		paddingHorizontal: SIZES.md,
 		paddingVertical: SIZES.md,
 	},
+	otpContainer: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+		gap: SIZES.sm,
+	},
+	otpInput: {
+		width: 42,
+		height: 50,
+		textAlign: 'center',
+		fontSize: 18,
+		borderWidth: 3,
+		borderColor: COLORS.border,
+		borderRadius: SIZES.radius,
+		backgroundColor: COLORS.card,
+	},
 	textInput: {
 		flex: 1,
 		marginLeft: SIZES.sm,
 		fontSize: 16,
 		color: COLORS.text,
+		...(Platform.select({ web: ({ outlineStyle: 'none', outlineWidth: 0, outlineColor: 'transparent' } as any) })),
 	},
 	textArea: {
 		height: 80,
@@ -95,6 +112,20 @@ export const styles = StyleSheet.create({
 		flexDirection: 'row',
 		padding: SIZES.md,
 		alignItems: 'center',
+	},
+	navigationRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+		padding: SIZES.md,
+	},
+	resendText: {
+		color: COLORS.primary,
+		fontWeight: '600',
+		fontSize: 14,
+	},
+	verifyButton: {
+		minWidth: 140,
 	},
 	backButtonText: {
 		fontSize: 16,

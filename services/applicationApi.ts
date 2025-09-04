@@ -89,6 +89,8 @@ export const applicationApi = baseApi.injectEndpoints({
             }),
             providesTags: ['VendorStatus'],
         }),
+
+        
     }),
     overrideExisting: true,
 });

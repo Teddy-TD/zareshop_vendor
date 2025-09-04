@@ -14,11 +14,13 @@ import {
   TextInput,
   Alert,
   Image,
+  Platform,
 } from 'react-native';
 import { Lock, Eye, EyeOff, ArrowLeft, Phone, Grid, AlertCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { COLORS, SIZES } from '@/constants/theme';
 import CustomButton from '@/components/CustomButton';
+ 
 import { 
   validateLoginForm, 
   validateLoginField, 
@@ -31,6 +33,7 @@ export default function LoginScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+ 
   const [userId, setUserId] = useState<string | null>(null); // Track user ID after login
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [showPassword, setShowPassword] = useState(false);
@@ -45,6 +48,8 @@ export default function LoginScreen() {
     useGetUserVendorStatusQuery(undefined, {
       skip: !userId, // Only run the query when userId is available
     });
+
+   
 
   const checkVendorStatusAndRoute = async () => {
     if (vendorStatusLoading) {
@@ -121,13 +126,10 @@ export default function LoginScreen() {
 
   // Handle forgot password
   const handleForgotPassword = () => {
-    // TODO: Implement forgot password functionality
-    Alert.alert(
-      'Forgot Password',
-      'Forgot password functionality will be implemented soon. Please contact support for assistance.',
-      [{ text: 'OK' }]
-    );
+    router.push('/auth/forgot-password');
   };
+
+ 
 
   // Parse and display login errors gracefully
   const parseLoginError = (error: any): string => {
@@ -425,6 +427,8 @@ export default function LoginScreen() {
   <Text style={styles.errorText}>{fieldErrors.password}</Text>
 )}
 
+ 
+
 <TouchableOpacity style={styles.forgotPassword} onPress={handleForgotPassword}>
   <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
 </TouchableOpacity>
@@ -463,7 +467,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   forgotPassword: {
-    alignItems: 'start',
+    alignItems: 'flex-start',
     
     paddingVertical: SIZES.sm,
   },
@@ -559,27 +563,13 @@ const styles = StyleSheet.create({
     textInput: {
     flex: 1,
     marginLeft: SIZES.sm,
-    outlineWidth : 0,
-    outlineColor: 'transparent',
-    outlineStyle: 'none',
     fontSize: 16,
     color: COLORS.text,
     borderWidth: 0,
     borderColor: 'transparent',
     backgroundColor: 'transparent',
     textDecorationLine: 'none',
-    WebkitAppearance : 'none',
-    MozAppearance: 'none',
-    appearance: 'none',
-    boxShadow: 'none',
-    WebkitBoxShadow: 'none',
-    MozBoxShadow: 'none',
-
-    ':focus': {
-      outline : 'none',
-      borderColor : 'transparent',
-      boxShadow: 'none',
-    },
+    ...(Platform.select({ web: ({ outlineStyle: 'none', outlineWidth: 0, outlineColor: 'transparent' } as any) })),
 
   },
   

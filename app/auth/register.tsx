@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, SafeAreaView, StatusBar, TouchableOpacity, TextInput, ScrollView, Alert } from 'react-native';
 import { ArrowLeft, User, Phone, Mail, Lock, AlertCircle } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -6,8 +6,9 @@ import { Image } from 'react-native';
 import { router } from 'expo-router';
 import { COLORS, SIZES } from '@/constants/theme';
 import { styles } from './register.styles';
+import ImageUploader from '@/components/Image_Uploader';
 import CustomButton from '@/components/CustomButton';
-import { useLoginMutation, useRegisterVendorOwnerMutation, useVerifyOtpMutation } from '@/services/authApi';
+import { useLoginMutation, useRegisterVendorOwnerMutation, useVerifyOtpMutation, useResendOtpMutation } from '@/services/authApi';
 import { useAppDispatch } from '@/store/hooks';
 import { setCredentialsAndPersist } from '@/features/auth/authSlice';
 import { useGetUserVendorStatusQuery } from '@/services/applicationApi';
@@ -22,6 +23,7 @@ import {
 export default function RegisterScreen() {
   const dispatch = useAppDispatch();
   const [step, setStep] = useState(1);
+  const otpInputsRef = useRef<Array<TextInput | null>>([]);
   const [formData, setFormData] = useState({
     fullName: '',
     phoneNumber: '',
@@ -35,6 +37,8 @@ export default function RegisterScreen() {
   const [registerVendor, { isLoading: isRegistering }] = useRegisterVendorOwnerMutation();
   const [verifyOtp, { isLoading: isVerifying }] = useVerifyOtpMutation();
   const [login, { isLoading: isLoggingIn }] = useLoginMutation();
+  const [resendOtpTrigger, { isLoading: isResending }] = useResendOtpMutation();
+  const [resendCooldown, setResendCooldown] = useState(0);
   const { data: vendorStatusData, refetch: refetchVendorStatus } = useGetUserVendorStatusQuery(undefined, {
     skip: true // Skip initial fetch, we'll call it manually
   });
@@ -109,6 +113,39 @@ export default function RegisterScreen() {
     handleFieldChange(key as keyof RegisterFormData, value);
   };
 
+  const handleOtpDigitChange = (index: number, value: string) => {
+    const sanitized = value.replace(/\D/g, '').slice(0, 1);
+    const current = (formData.otpCode || '').padEnd(6, '');
+    const next = current.split('');
+    next[index] = sanitized;
+    const joined = next.join('').slice(0, 6);
+    setFormData(prev => ({ ...prev, otpCode: joined }));
+
+    if (sanitized && index < 5) {
+      otpInputsRef.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyPress = (index: number, key: string) => {
+    if (key === 'Backspace') {
+      const current = (formData.otpCode || '').padEnd(6, '');
+      const next = current.split('');
+      if (!next[index] && index > 0) {
+        otpInputsRef.current[index - 1]?.focus();
+      }
+      next[index] = '';
+      setFormData(prev => ({ ...prev, otpCode: next.join('') }));
+    }
+  };
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
   // Parse and display register errors gracefully
   const parseRegisterError = (error: any): string => {
     console.log('🔍 Parsing register error:', error);
@@ -155,9 +192,7 @@ export default function RegisterScreen() {
         return 'Password must not exceed 64 characters.';
       }
       
-      if (message.includes('email must be a valid email address')) {
-        return 'Please enter a valid email address.';
-      }
+      
       
       if (message.includes('picture must be a valid url')) {
         return 'Please select a valid image file.';
@@ -254,10 +289,14 @@ export default function RegisterScreen() {
         name: formData.fullName,
         phone_number: cleanRegisterPhoneNumber(formData.phoneNumber),
         password: formData.password,
-        email: formData.email || undefined,
         picture: picture || undefined,
       }).unwrap();
       setStep(2);
+      setRegisterError('');
+      setResendCooldown(60);
+      setTimeout(() => {
+        otpInputsRef.current[0]?.focus();
+      }, 100);
     } catch (e: any) {
       const errorMessage = parseRegisterError(e);
       setRegisterError(errorMessage);
@@ -306,6 +345,23 @@ export default function RegisterScreen() {
       } else {
         setRegisterError('Login failed after OTP verification.');
       }
+    } catch (e: any) {
+      const errorMessage = parseRegisterError(e);
+      setRegisterError(errorMessage);
+    }
+  };
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || isResending) return;
+    try {
+      const phone_number = cleanRegisterPhoneNumber(formData.phoneNumber);
+      if (!phone_number) {
+        setRegisterError('Please enter a valid phone number first.');
+        return;
+      }
+      await resendOtpTrigger({ phone_number }).unwrap();
+      setResendCooldown(60);
+      Alert.alert('OTP', 'A new OTP has been sent to your phone number.');
+      otpInputsRef.current[0]?.focus();
     } catch (e: any) {
       const errorMessage = parseRegisterError(e);
       setRegisterError(errorMessage);
@@ -360,7 +416,6 @@ export default function RegisterScreen() {
           fieldErrors.phoneNumber && styles.inputContainerError
         ]}>
           <Text style={styles.phonePrefix}>+251</Text>
-          <Phone size={20} color={fieldErrors.phoneNumber ? COLORS.error : COLORS.textLight} />
           <TextInput
             style={styles.textInput}
             placeholder="Enter your phone number"
@@ -376,28 +431,7 @@ export default function RegisterScreen() {
         )}
       </View>
 
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Email (optional)</Text>
-        <View style={[
-          styles.inputContainer,
-          fieldErrors.email && styles.inputContainerError
-        ]}>
-          <Mail size={20} color={fieldErrors.email ? COLORS.error : COLORS.textLight} />
-          <TextInput
-            style={styles.textInput}
-            placeholder="Enter your email"
-            value={formData.email}
-            onChangeText={(value) => updateFormData('email', value)}
-            onBlur={() => handleFieldBlur('email')}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            maxLength={100}
-          />
-        </View>
-        {fieldErrors.email && (
-          <Text style={styles.errorText}>{fieldErrors.email}</Text>
-        )}
-      </View>
+      
 
       {/* Only phone number, name and password required */}
 
@@ -425,15 +459,12 @@ export default function RegisterScreen() {
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Profile Picture (optional)</Text>
-        <View style={styles.inputContainer}>
-          <CustomButton title={picture ? 'Change Picture' : 'Upload Picture'} onPress={pickImage} />
-        </View>
-        {picture && (
-          <View style={{ marginTop: SIZES.sm }}>
-            <Image source={{ uri: picture.uri }} style={{ width: 80, height: 80, borderRadius: 8 }} />
-          </View>
-        )}
+        <ImageUploader
+          label="Profile Picture (optional)"
+          image={picture ? { uri: picture.uri } : undefined}
+          onPick={pickImage}
+          onRemove={() => setPicture(null)}
+        />
       </View>
     </View>
   );
@@ -459,20 +490,24 @@ export default function RegisterScreen() {
 
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>OTP Code *</Text>
-        <View style={[
-          styles.inputContainer,
-          fieldErrors.otpCode && styles.inputContainerError
-        ]}>
-          <TextInput
-            style={styles.textInput}
-            placeholder="6-digit code"
-            value={formData.otpCode}
-            onChangeText={(value) => updateFormData('otpCode', value)}
-            onBlur={() => handleFieldBlur('otpCode')}
-            keyboardType="number-pad"
-            maxLength={6}
-            autoCapitalize="none"
-          />
+        <View style={styles.otpContainer}>
+          {[0,1,2,3,4,5].map((i) => (
+            <TextInput
+              key={i}
+              ref={(el) => {
+                otpInputsRef.current[i] = el;
+              }}
+              style={[styles.otpInput, fieldErrors.otpCode && styles.inputContainerError]}
+              value={(formData.otpCode || '').padEnd(6, '').charAt(i)}
+              onChangeText={(v) => handleOtpDigitChange(i, v)}
+              onKeyPress={({ nativeEvent }) => handleOtpKeyPress(i, nativeEvent.key)}
+              keyboardType="number-pad"
+              maxLength={1}
+              returnKeyType={i === 5 ? 'done' : 'next'}
+              textContentType="oneTimeCode"
+              autoCapitalize="none"
+            />
+          ))}
         </View>
         {fieldErrors.otpCode && (
           <Text style={styles.errorText}>{fieldErrors.otpCode}</Text>
@@ -514,21 +549,22 @@ export default function RegisterScreen() {
       </ScrollView>
 
       {/* Navigation */}
-      <View style={styles.navigation}>
-        {step > 1 && (
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => setStep(step - 1)}
-          >
-            <Text style={styles.backButtonText}>Back</Text>
+      <View style={styles.navigationRow}>
+        {step > 1 ? (
+          <TouchableOpacity onPress={handleResendOtp} disabled={isResending || resendCooldown > 0}>
+            <Text style={[styles.resendText, (isResending || resendCooldown > 0) && { opacity: 0.5 }]}>
+              {isResending ? 'Sending…' : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend OTP'}
+            </Text>
           </TouchableOpacity>
+        ) : (
+          <View />
         )}
-        
+
         <CustomButton
-          title={step === 1 ? 'Register' : 'Verify & Login'}
+          title={step === 1 ? 'Register' : 'Verify'}
           onPress={handleNext}
           loading={isRegistering || isVerifying || isLoggingIn}
-          style={styles.nextButton}
+          style={styles.verifyButton}
         />
       </View>
     </SafeAreaView>
