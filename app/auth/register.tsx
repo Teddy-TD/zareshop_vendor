@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, SafeAreaView, StatusBar, TouchableOpacity, TextInput, ScrollView, Alert } from 'react-native';
-import { ArrowLeft, User, Phone } from 'lucide-react-native';
+import { ArrowLeft, User, Phone, Mail, Lock, AlertCircle } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'react-native';
 import { router } from 'expo-router';
@@ -11,6 +11,13 @@ import { useLoginMutation, useRegisterVendorOwnerMutation, useVerifyOtpMutation 
 import { useAppDispatch } from '@/store/hooks';
 import { setCredentialsAndPersist } from '@/features/auth/authSlice';
 import { useGetUserVendorStatusQuery } from '@/services/applicationApi';
+import { 
+  validateRegisterFormStep1, 
+  validateRegisterFormStep2,
+  validateRegisterField, 
+  cleanRegisterPhoneNumber,
+  RegisterFormData
+} from '../../validations/register_validation';
 
 export default function RegisterScreen() {
   const dispatch = useAppDispatch();
@@ -23,6 +30,8 @@ export default function RegisterScreen() {
     otpCode: '',
   });
   const [picture, setPicture] = useState<{ uri: string; name: string; type: string } | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [registerError, setRegisterError] = useState<string>('');
   const [registerVendor, { isLoading: isRegistering }] = useRegisterVendorOwnerMutation();
   const [verifyOtp, { isLoading: isVerifying }] = useVerifyOtpMutation();
   const [login, { isLoading: isLoggingIn }] = useLoginMutation();
@@ -62,18 +71,179 @@ export default function RegisterScreen() {
     }
   };
 
+  // Validate individual field
+  const validateField = (field: keyof RegisterFormData, value: string) => {
+    const validation = validateRegisterField(field, value);
+    setFieldErrors(prev => ({
+      ...prev,
+      [field]: validation.isValid ? '' : validation.error || ''
+    }));
+    return validation.isValid;
+  };
+
+  // Handle field change with validation
+  const handleFieldChange = (field: keyof RegisterFormData, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    
+    // Clear field error when user starts typing
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({
+        ...prev,
+        [field]: ''
+      }));
+    }
+    
+    // Clear register error when user starts typing
+    if (registerError) {
+      setRegisterError('');
+    }
+  };
+
+  // Handle field blur with validation
+  const handleFieldBlur = (field: keyof RegisterFormData) => {
+    const value = formData[field];
+    validateField(field, value);
+  };
+
   const updateFormData = (key: string, value: string) => {
-    setFormData(prev => ({ ...prev, [key]: value }));
+    handleFieldChange(key as keyof RegisterFormData, value);
+  };
+
+  // Parse and display register errors gracefully
+  const parseRegisterError = (error: any): string => {
+    console.log('🔍 Parsing register error:', error);
+    
+    // Network errors
+    if (!error?.data && !error?.message) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+    
+    // API response errors
+    if (error?.data?.message) {
+      const message = error.data.message.toLowerCase();
+      
+      // Backend validation errors
+      if (message.includes('name is required')) {
+        return 'Full name is required.';
+      }
+      
+      if (message.includes('name must be at least 2 characters')) {
+        return 'Full name must be at least 2 characters long.';
+      }
+      
+      if (message.includes('name must be at most 50 characters')) {
+        return 'Full name must not exceed 50 characters.';
+      }
+      
+      if (message.includes('phone number must be a valid international format')) {
+        return 'Please enter a valid phone number starting with 9.';
+      }
+      
+      if (message.includes('phone number is required')) {
+        return 'Phone number is required.';
+      }
+      
+      if (message.includes('password is required')) {
+        return 'Password is required.';
+      }
+      
+      if (message.includes('password must be at least 6 characters')) {
+        return 'Password must be at least 6 characters long.';
+      }
+      
+      if (message.includes('password must be at most 64 characters')) {
+        return 'Password must not exceed 64 characters.';
+      }
+      
+      if (message.includes('email must be a valid email address')) {
+        return 'Please enter a valid email address.';
+      }
+      
+      if (message.includes('picture must be a valid url')) {
+        return 'Please select a valid image file.';
+      }
+      
+      // User already exists
+      if (message.includes('user already exists') || message.includes('phone number already registered')) {
+        return 'An account with this phone number already exists. Please try logging in instead.';
+      }
+      
+      // OTP errors
+      if (message.includes('invalid otp') || message.includes('otp expired')) {
+        return 'Invalid or expired OTP code. Please try again.';
+      }
+      
+      // Return the original message if it's user-friendly
+      return error.data.message;
+    }
+    
+    // HTTP status code errors
+    if (error?.status) {
+      switch (error.status) {
+        case 400:
+          return 'Invalid request. Please check your input and try again.';
+        case 409:
+          return 'An account with this phone number already exists. Please try logging in instead.';
+        case 500:
+          return 'Server error. Please try again in a few moments.';
+        case 503:
+          return 'Service temporarily unavailable. Please try again later.';
+        default:
+          return 'An error occurred. Please try again.';
+      }
+    }
+    
+    // Generic error messages
+    if (error?.message) {
+      if (error.message.includes('Network Error') || error.message.includes('fetch')) {
+        return 'Unable to connect to the server. Please check your internet connection.';
+      }
+      
+      return error.message;
+    }
+    
+    // Fallback error message
+    return 'Registration failed. Please try again.';
   };
 
   const handleNext = () => {
     if (step === 1) {
-      if (!formData.fullName || !formData.phoneNumber || !formData.password) {
-        Alert.alert('Error', 'Please fill in all required fields');
+      // Clear previous errors
+      setRegisterError('');
+      setFieldErrors({});
+      
+      // Validate step 1 form
+      const validation = validateRegisterFormStep1(formData);
+      
+      if (!validation.isValid) {
+        // Set field errors
+        const errors: Record<string, string> = {};
+        validation.errors.forEach(error => {
+          errors[error.field] = error.error || '';
+        });
+        setFieldErrors(errors);
         return;
       }
+      
       handleSubmit();
     } else if (step === 2) {
+      // Clear previous errors
+      setRegisterError('');
+      setFieldErrors({});
+      
+      // Validate step 2 form
+      const validation = validateRegisterFormStep2(formData);
+      
+      if (!validation.isValid) {
+        // Set field errors
+        const errors: Record<string, string> = {};
+        validation.errors.forEach(error => {
+          errors[error.field] = error.error || '';
+        });
+        setFieldErrors(errors);
+        return;
+      }
+      
       handleVerifyOtp();
     }
   };
@@ -82,14 +252,15 @@ export default function RegisterScreen() {
     try {
       await registerVendor({
         name: formData.fullName,
-        phone_number: formData.phoneNumber,
+        phone_number: cleanRegisterPhoneNumber(formData.phoneNumber),
         password: formData.password,
         email: formData.email || undefined,
         picture: picture || undefined,
       }).unwrap();
       setStep(2);
     } catch (e: any) {
-      Alert.alert('Error', e?.data?.message || 'Failed to register.');
+      const errorMessage = parseRegisterError(e);
+      setRegisterError(errorMessage);
     }
   };
 
@@ -113,13 +284,16 @@ export default function RegisterScreen() {
   };
 
   const handleVerifyOtp = async () => {
-    if (!formData.otpCode) {
-      Alert.alert('Error', 'Enter the OTP code sent to your phone');
-      return;
-    }
     try {
-      await verifyOtp({ phone_number: formData.phoneNumber, code: formData.otpCode }).unwrap();
-      const loggedIn = await login({ phone_number: formData.phoneNumber, password: formData.password }).unwrap();
+      await verifyOtp({ 
+        phone_number: cleanRegisterPhoneNumber(formData.phoneNumber), 
+        code: formData.otpCode 
+      }).unwrap();
+      
+      const loggedIn = await login({ 
+        phone_number: cleanRegisterPhoneNumber(formData.phoneNumber), 
+        password: formData.password 
+      }).unwrap();
       
       if (loggedIn.token) {
         await dispatch(setCredentialsAndPersist({ 
@@ -130,10 +304,11 @@ export default function RegisterScreen() {
         // Check vendor status and route accordingly
         await checkVendorStatusAndRoute();
       } else {
-        Alert.alert('Error', 'Login failed after OTP verification.');
+        setRegisterError('Login failed after OTP verification.');
       }
     } catch (e: any) {
-      Alert.alert('Error', e?.data?.message || 'OTP verification or login failed.');
+      const errorMessage = parseRegisterError(e);
+      setRegisterError(errorMessage);
     }
   };
 
@@ -142,62 +317,111 @@ export default function RegisterScreen() {
       <Text style={styles.stepTitle}>Basic Information</Text>
       <Text style={styles.stepSubtitle}>Create your account</Text>
       
+      {/* Register Error Display */}
+      {registerError && (
+        <View style={styles.errorContainer}>
+          <AlertCircle size={20} color={COLORS.error} />
+          <Text style={styles.registerErrorText}>{registerError}</Text>
+          <TouchableOpacity 
+            onPress={() => setRegisterError('')}
+            style={styles.errorDismissButton}
+          >
+            <Text style={styles.errorDismissText}>×</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Full Name *</Text>
-        <View style={styles.inputContainer}>
-          <User size={20} color={COLORS.textLight} />
+        <View style={[
+          styles.inputContainer,
+          fieldErrors.fullName && styles.inputContainerError
+        ]}>
+          <User size={20} color={fieldErrors.fullName ? COLORS.error : COLORS.textLight} />
           <TextInput
             style={styles.textInput}
             placeholder="Enter your full name"
             value={formData.fullName}
             onChangeText={(value) => updateFormData('fullName', value)}
+            onBlur={() => handleFieldBlur('fullName')}
+            autoCapitalize="words"
+            maxLength={50}
           />
         </View>
+        {fieldErrors.fullName && (
+          <Text style={styles.errorText}>{fieldErrors.fullName}</Text>
+        )}
       </View>
 
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Phone Number *</Text>
-        <View style={styles.inputContainer}>
-          <Phone size={20} color={COLORS.textLight} />
+        <View style={[
+          styles.inputContainer,
+          fieldErrors.phoneNumber && styles.inputContainerError
+        ]}>
+          <Text style={styles.phonePrefix}>+251</Text>
+          <Phone size={20} color={fieldErrors.phoneNumber ? COLORS.error : COLORS.textLight} />
           <TextInput
             style={styles.textInput}
             placeholder="Enter your phone number"
             value={formData.phoneNumber}
             onChangeText={(value) => updateFormData('phoneNumber', value)}
+            onBlur={() => handleFieldBlur('phoneNumber')}
             keyboardType="phone-pad"
-            maxLength={10}
+            maxLength={9}
           />
         </View>
+        {fieldErrors.phoneNumber && (
+          <Text style={styles.errorText}>{fieldErrors.phoneNumber}</Text>
+        )}
       </View>
 
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Email (optional)</Text>
-        <View style={styles.inputContainer}>
+        <View style={[
+          styles.inputContainer,
+          fieldErrors.email && styles.inputContainerError
+        ]}>
+          <Mail size={20} color={fieldErrors.email ? COLORS.error : COLORS.textLight} />
           <TextInput
             style={styles.textInput}
             placeholder="Enter your email"
             value={formData.email}
             onChangeText={(value) => updateFormData('email', value)}
+            onBlur={() => handleFieldBlur('email')}
             keyboardType="email-address"
             autoCapitalize="none"
+            maxLength={100}
           />
         </View>
+        {fieldErrors.email && (
+          <Text style={styles.errorText}>{fieldErrors.email}</Text>
+        )}
       </View>
 
       {/* Only phone number, name and password required */}
 
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Password *</Text>
-        <View style={styles.inputContainer}>
+        <View style={[
+          styles.inputContainer,
+          fieldErrors.password && styles.inputContainerError
+        ]}>
+          <Lock size={20} color={fieldErrors.password ? COLORS.error : COLORS.textLight} />
           <TextInput
             style={styles.textInput}
             placeholder="Enter a strong password"
             value={formData.password}
             onChangeText={(value) => updateFormData('password', value)}
+            onBlur={() => handleFieldBlur('password')}
             secureTextEntry
             autoCapitalize="none"
+            maxLength={64}
           />
         </View>
+        {fieldErrors.password && (
+          <Text style={styles.errorText}>{fieldErrors.password}</Text>
+        )}
       </View>
 
       <View style={styles.inputGroup}>
@@ -217,20 +441,42 @@ export default function RegisterScreen() {
   const renderStep2 = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Verify Phone</Text>
-      <Text style={styles.stepSubtitle}>Enter the OTP sent to {formData.phoneNumber}</Text>
+      <Text style={styles.stepSubtitle}>Enter the OTP sent to +251{formData.phoneNumber}</Text>
+
+      {/* Register Error Display */}
+      {registerError && (
+        <View style={styles.errorContainer}>
+          <AlertCircle size={20} color={COLORS.error} />
+          <Text style={styles.registerErrorText}>{registerError}</Text>
+          <TouchableOpacity 
+            onPress={() => setRegisterError('')}
+            style={styles.errorDismissButton}
+          >
+            <Text style={styles.errorDismissText}>×</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>OTP Code *</Text>
-        <View style={styles.inputContainer}>
+        <View style={[
+          styles.inputContainer,
+          fieldErrors.otpCode && styles.inputContainerError
+        ]}>
           <TextInput
             style={styles.textInput}
             placeholder="6-digit code"
             value={formData.otpCode}
             onChangeText={(value) => updateFormData('otpCode', value)}
+            onBlur={() => handleFieldBlur('otpCode')}
             keyboardType="number-pad"
             maxLength={6}
+            autoCapitalize="none"
           />
         </View>
+        {fieldErrors.otpCode && (
+          <Text style={styles.errorText}>{fieldErrors.otpCode}</Text>
+        )}
       </View>
     </View>
   );
