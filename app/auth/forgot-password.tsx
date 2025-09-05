@@ -152,6 +152,7 @@ export default function ForgotPasswordScreen() {
             </View>
 
             <CustomButton title="Request Reset" onPress={submit} loading={isLoading || isRequesting} style={styles.submitButton} />
+            
           </>
         )}
 

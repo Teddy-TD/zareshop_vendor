@@ -14,6 +14,9 @@ export const COLORS = {
   red: '#EF4444',           // Unified red tone
   textGray: '#6B7280',
   danger: '#DC2626',        // Strong red for destructive actions
+  successLight: '#F0F9EB',  // Light green for success states
+  warningLight: '#FFFBEB',  // Light yellow for warning states
+  errorLight: '#FDE8E9',    // Light red for error states
 };
 
 export const SIZES = {
