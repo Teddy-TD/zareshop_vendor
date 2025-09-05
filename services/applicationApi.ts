@@ -46,6 +46,11 @@ type VendorStatusResponse = {
     isApproved: boolean;
     status: boolean;
     createdAt: string;
+    categories: Array<{
+      id: number;
+      name: string;
+      description?: string;
+    }>;
   };
   message?: string;
 };
@@ -89,6 +94,8 @@ export const applicationApi = baseApi.injectEndpoints({
             }),
             providesTags: ['VendorStatus'],
         }),
+
+        
     }),
     overrideExisting: true,
 });

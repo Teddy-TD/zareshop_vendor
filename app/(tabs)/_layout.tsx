@@ -7,27 +7,26 @@ import { router } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
 
 export default function TabLayout() {
-  const { checkAuth, isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
 
   useEffect(() => {
-    // Only check auth if not loading and not authenticated
+    // Redirect to login if not authenticated
     if (!isLoading && !isAuthenticated) {
-      checkAuth();
+      router.replace('/auth/login');
     }
-  }, [isLoading, isAuthenticated, checkAuth]);
+  }, [isAuthenticated, isLoading]);
 
-  // Show loading while authentication state is being restored
+  // Show loading while checking auth
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.white }}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.primary }}>
+        <ActivityIndicator size="large" color={COLORS.white} />
       </View>
     );
   }
 
-  // If not authenticated after loading, redirect to login
+  // Don't render tabs if not authenticated
   if (!isAuthenticated) {
-    router.replace('/auth/login');
     return null;
   }
 

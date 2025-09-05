@@ -9,123 +9,196 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  TextInput,
+  RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Plus, Search, Filter, MoveVertical as MoreVertical, Eye, CreditCard as Edit, Trash2 } from 'lucide-react-native';
 import { COLORS, SIZES } from '@/constants/theme';
 import AnimatedCard from '@/components/AnimatedCard';
 import CustomButton from '@/components/CustomButton';
+import { 
+  useGetProductsQuery, 
+  useGetCategoriesQuery, 
+  useDeleteProductMutation,
+  useSearchProductsQuery,
+  useGetProductsByStockStatusQuery 
+} from '@/services/productApi';
 
 export default function Products() {
-  const [products] = useState([
-    {
-      id: 1,
-      name: 'iPhone 14 Case',
-      category: 'Electronics',
-      price: '450 ETB',
-      stock: 23,
-      status: 'active',
-      image: 'https://images.pexels.com/photos/788946/pexels-photo-788946.jpeg?auto=compress&cs=tinysrgb&w=400',
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
+  const [selectedStockStatus, setSelectedStockStatus] = useState<'all' | 'active' | 'low_stock' | 'out_of_stock'>('all');
+  const [showFilters, setShowFilters] = useState(false);
+
+  // API hooks
+  const { data: productsData, isLoading: isLoadingProducts, refetch: refetchProducts } = useGetProductsQuery({
+    page: 1,
+    limit: 50,
+    category_id: selectedCategory || undefined,
+  });
+
+  const { data: stockStatusData, isLoading: isLoadingStockStatus } = useGetProductsByStockStatusQuery(
+    { 
+      status: selectedStockStatus as 'active' | 'low_stock' | 'out_of_stock',
+      page: 1,
+      limit: 50,
     },
-    {
-      id: 2,
-      name: 'Ethiopian Coffee Beans',
-      category: 'Food & Beverages',
-      price: '280 ETB',
-      stock: 5,
-      status: 'low_stock',
-      image: 'https://images.pexels.com/photos/894695/pexels-photo-894695.jpeg?auto=compress&cs=tinysrgb&w=400',
-    },
-    {
-      id: 3,
-      name: 'Traditional Dress',
-      category: 'Fashion',
-      price: '1,200 ETB',
-      stock: 0,
-      status: 'out_of_stock',
-      image: 'https://images.pexels.com/photos/1488463/pexels-photo-1488463.jpeg?auto=compress&cs=tinysrgb&w=400',
-    },
-    {
-      id: 4,
-      name: 'Leather Handbag',
-      category: 'Fashion',
-      price: '890 ETB',
-      stock: 15,
-      status: 'active',
-      image: 'https://images.pexels.com/photos/1152077/pexels-photo-1152077.jpeg?auto=compress&cs=tinysrgb&w=400',
-    },
-  ]);
+    { skip: selectedStockStatus === 'all' }
+  );
+
+  const { data: categoriesData, isLoading: isLoadingCategories } = useGetCategoriesQuery();
+
+  const { data: searchResults, isLoading: isSearching } = useSearchProductsQuery(
+    { query: searchQuery, page: 1, limit: 50 },
+    { skip: !searchQuery.trim() }
+  );
+
+  const [deleteProduct, { isLoading: isDeleting }] = useDeleteProductMutation();
+
+  // Use search results if searching, otherwise use filtered products
+  const products = searchQuery.trim() 
+    ? searchResults?.products || [] 
+    : selectedStockStatus === 'all' 
+      ? productsData?.products || []
+      : stockStatusData?.products || [];
+  
+  const totalProducts = searchQuery.trim() 
+    ? searchResults?.pagination.total || 0 
+    : selectedStockStatus === 'all' 
+      ? productsData?.pagination.total || 0
+      : stockStatusData?.pagination.total || 0;
+  const lowStockCount = products.filter(p => p.stock <= 10 && p.stock > 0).length;
+  const outOfStockCount = products.filter(p => p.stock === 0).length;
 
   const handleAddProduct = () => {
     router.push('/products/add-product');
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active':
-        return COLORS.success;
-      case 'low_stock':
-        return COLORS.warning;
-      case 'out_of_stock':
-        return COLORS.error;
-      default:
-        return COLORS.textLight;
-    }
+  const handleDeleteProduct = async (productId: number, productName: string) => {
+    Alert.alert(
+      'Delete Product',
+      `Are you sure you want to delete "${productName}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteProduct(productId).unwrap();
+              Alert.alert('Success', 'Product deleted successfully');
+              refetchProducts();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete product');
+            }
+          },
+        },
+      ]
+    );
   };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'Active';
-      case 'low_stock':
-        return 'Low Stock';
-      case 'out_of_stock':
-        return 'Out of Stock';
-      default:
-        return 'Unknown';
-    }
+  const handleEditProduct = (productId: number) => {
+    router.push({
+      pathname: '/products/edit-product',
+      params: { id: productId.toString() }
+    });
   };
 
-  const ProductCard = ({ product, delay = 0 }: { product: any; delay?: number }) => (
-    <AnimatedCard delay={delay} style={styles.productCard}>
-      <View style={styles.productHeader}>
-        <Image source={{ uri: product.image }} style={styles.productImage} />
-        <View style={styles.productInfo}>
-          <Text style={styles.productName}>{product.name}</Text>
-          <Text style={styles.productCategory}>{product.category}</Text>
-          <Text style={styles.productPrice}>{product.price}</Text>
-          <View style={styles.stockContainer}>
-            <View 
-              style={[
-                styles.statusDot, 
-                { backgroundColor: getStatusColor(product.status) }
-              ]} 
+  const handleViewProduct = (productId: number) => {
+    router.push({
+      pathname: '/products/product-detail',
+      params: { id: productId.toString() }
+    });
+  };
+
+  const getStatusColor = (stock: number) => {
+    if (stock === 0) return COLORS.error;
+    if (stock <= 10) return COLORS.warning;
+    return COLORS.success;
+  };
+
+  const getStatusText = (stock: number) => {
+    if (stock === 0) return 'Out of Stock';
+    if (stock <= 10) return 'Low Stock';
+    return 'Active';
+  };
+
+  const ProductCard = ({ product, delay = 0 }: { product: any; delay?: number }) => {
+    const [imageFailed, setImageFailed] = React.useState(false);
+    const imageUri = product?.images?.length ? product.images[0].image_url : undefined;
+    const threshold = product?.low_stock_threshold ?? 10;
+    const statusColor = imageUri !== undefined ? getStatusColor(product.stock <= threshold ? (product.stock) : product.stock) : getStatusColor(product.stock);
+    const statusText = product.stock === 0 ? 'Out of Stock' : (product.stock <= threshold ? 'Low Stock' : 'In Stock');
+
+    return (
+      <AnimatedCard delay={delay} style={styles.productCard}>
+        <View style={styles.productHeader}>
+          {imageUri && !imageFailed ? (
+            <Image 
+              source={{ uri: imageUri }} 
+              style={styles.productImage}
+              resizeMode="cover"
+              onError={() => setImageFailed(true)}
             />
-            <Text style={styles.stockText}>
-              {product.stock} in stock • {getStatusText(product.status)}
-            </Text>
+          ) : (
+            <Image 
+              source={require('../../assets/images/icon.png')} 
+              style={styles.productImage}
+              resizeMode="cover"
+            />
+          )}
+          <View style={styles.productInfo}>
+            <Text style={styles.productName}>{product.name}</Text>
+            <Text style={styles.productCategory}>{product.category?.name || 'Uncategorized'}</Text>
+            {typeof product.price === 'number' && (
+              <Text style={styles.productPrice}>Price: {product.price}</Text>
+            )}
+            <View style={styles.stockContainer}>
+              <View 
+                style={[
+                  styles.statusDot, 
+                  { backgroundColor: product.stock === 0 ? COLORS.error : (product.stock <= threshold ? COLORS.warning : COLORS.success) }
+                ]} 
+              />
+              <Text style={styles.stockText}>
+                {product.stock} in stock • {statusText}
+              </Text>
+            </View>
           </View>
+          <TouchableOpacity style={styles.moreButton}>
+            <MoreVertical size={20} color={COLORS.textLight} />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.moreButton}>
-          <MoreVertical size={20} color={COLORS.textLight} />
-        </TouchableOpacity>
-      </View>
-      <View style={styles.productActions}>
-        <TouchableOpacity style={styles.actionButton}>
-          <Eye size={16} color={COLORS.primary} />
-          <Text style={styles.actionText}>View</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
-          <Edit size={16} color={COLORS.textLight} />
-          <Text style={styles.actionText}>Edit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
-          <Trash2 size={16} color={COLORS.error} />
-          <Text style={[styles.actionText, { color: COLORS.error }]}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-    </AnimatedCard>
-  );
+        <View style={styles.productActions}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handleViewProduct(product.id)}
+          >
+            <Eye size={16} color={COLORS.primary} />
+            <Text style={styles.actionText}>View</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handleEditProduct(product.id)}
+          >
+            <Edit size={16} color={COLORS.textLight} />
+            <Text style={styles.actionText}>Edit</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handleDeleteProduct(product.id, product.name)}
+            disabled={isDeleting}
+          >
+            <Trash2 size={16} color={COLORS.error} />
+            <Text style={[styles.actionText, { color: COLORS.error }]}>
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </AnimatedCard>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -143,34 +216,150 @@ export default function Products() {
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
           <Search size={20} color={COLORS.textLight} />
-          <Text style={styles.searchPlaceholder}>Search products...</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search products..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor={COLORS.textLight}
+          />
         </View>
-        <TouchableOpacity style={styles.filterButton}>
-          <Filter size={20} color={COLORS.primary} />
+        <TouchableOpacity 
+          style={[styles.filterButton, selectedCategory ? styles.filterButtonActive : null]}
+          onPress={() => setShowFilters(!showFilters)}
+        >
+          <Filter size={20} color={selectedCategory ? COLORS.white : COLORS.primary} />
         </TouchableOpacity>
       </View>
+
+      {/* Category Filter */}
+      {showFilters && categoriesData && (
+        <View style={styles.filterContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {/* Stock status chips */}
+            <TouchableOpacity
+              style={[
+                styles.categoryChip,
+                selectedStockStatus === 'all' ? styles.categoryChipActive : null
+              ]}
+              onPress={() => setSelectedStockStatus('all')}
+            >
+              <Text style={[
+                styles.categoryChipText,
+                selectedStockStatus === 'all' ? styles.categoryChipTextActive : null
+              ]}>All Status</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.categoryChip,
+                selectedStockStatus === 'active' ? styles.categoryChipActive : null
+              ]}
+              onPress={() => setSelectedStockStatus('active')}
+            >
+              <Text style={[
+                styles.categoryChipText,
+                selectedStockStatus === 'active' ? styles.categoryChipTextActive : null
+              ]}>Active</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.categoryChip,
+                selectedStockStatus === 'low_stock' ? styles.categoryChipActive : null
+              ]}
+              onPress={() => setSelectedStockStatus('low_stock')}
+            >
+              <Text style={[
+                styles.categoryChipText,
+                selectedStockStatus === 'low_stock' ? styles.categoryChipTextActive : null
+              ]}>Low Stock</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.categoryChip,
+                selectedStockStatus === 'out_of_stock' ? styles.categoryChipActive : null
+              ]}
+              onPress={() => setSelectedStockStatus('out_of_stock')}
+            >
+              <Text style={[
+                styles.categoryChipText,
+                selectedStockStatus === 'out_of_stock' ? styles.categoryChipTextActive : null
+              ]}>Out of Stock</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.categoryChip,
+                !selectedCategory ? styles.categoryChipActive : null
+              ]}
+              onPress={() => setSelectedCategory(null)}
+            >
+              <Text style={[
+                styles.categoryChipText,
+                !selectedCategory ? styles.categoryChipTextActive : null
+              ]}>
+                All Categories
+              </Text>
+            </TouchableOpacity>
+            {categoriesData.categories.map((category) => (
+              <TouchableOpacity
+                key={category.id}
+                style={[
+                  styles.categoryChip,
+                  selectedCategory === category.id ? styles.categoryChipActive : null
+                ]}
+                onPress={() => setSelectedCategory(category.id)}
+              >
+                <Text style={[
+                  styles.categoryChipText,
+                  selectedCategory === category.id ? styles.categoryChipTextActive : null
+                ]}>
+                  {category.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Stats */}
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>156</Text>
+          <Text style={styles.statValue}>{totalProducts}</Text>
           <Text style={styles.statLabel}>Total Products</Text>
         </View>
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>8</Text>
+          <Text style={styles.statValue}>{lowStockCount}</Text>
           <Text style={styles.statLabel}>Low Stock</Text>
         </View>
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>3</Text>
+          <Text style={styles.statValue}>{outOfStockCount}</Text>
           <Text style={styles.statLabel}>Out of Stock</Text>
         </View>
       </View>
+
+      {/* Loading State */}
+      {isLoadingProducts && (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading products...</Text>
+        </View>
+      )}
 
       {/* Product List */}
       <ScrollView 
         style={styles.productList}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={isLoadingProducts} onRefresh={refetchProducts} />
+        }
       >
+        {products.length === 0 && !isLoadingProducts && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>
+              {searchQuery.trim() ? 'No products found for your search' : 'No products available'}
+            </Text>
+          </View>
+        )}
+        
         {products.map((product, index) => (
           <ProductCard 
             key={product.id} 
@@ -232,6 +421,11 @@ const styles = StyleSheet.create({
     paddingVertical: SIZES.sm,
     marginRight: SIZES.sm,
   },
+  searchInput: {
+    marginLeft: SIZES.sm,
+    color: COLORS.text,
+    flex: 1,
+  },
   searchPlaceholder: {
     marginLeft: SIZES.sm,
     color: COLORS.textLight,
@@ -244,6 +438,33 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.secondary,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  filterButtonActive: {
+    backgroundColor: COLORS.primary,
+  },
+  filterContainer: {
+    paddingHorizontal: SIZES.md,
+    marginBottom: SIZES.md,
+  },
+  categoryChip: {
+    paddingHorizontal: SIZES.md,
+    paddingVertical: SIZES.sm,
+    borderRadius: SIZES.radius,
+    backgroundColor: COLORS.card,
+    marginRight: SIZES.xs,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  categoryChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  categoryChipText: {
+    fontSize: 12,
+    color: COLORS.textLight,
+  },
+  categoryChipTextActive: {
+    color: COLORS.white,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -346,5 +567,26 @@ const styles = StyleSheet.create({
   },
   addProductButton: {
     marginBottom: SIZES.sm,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SIZES.md,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: COLORS.textLight,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SIZES.md,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: COLORS.textLight,
+    textAlign: 'center',
   },
 });

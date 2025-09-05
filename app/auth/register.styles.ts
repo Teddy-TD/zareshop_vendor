@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
 import { COLORS, SIZES } from '@/constants/theme';
 
 export const styles = StyleSheet.create({
@@ -81,11 +81,28 @@ export const styles = StyleSheet.create({
 		paddingHorizontal: SIZES.md,
 		paddingVertical: SIZES.md,
 	},
+	otpContainer: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+		gap: SIZES.sm,
+	},
+	otpInput: {
+		width: 42,
+		height: 50,
+		textAlign: 'center',
+		fontSize: 18,
+		borderWidth: 3,
+		borderColor: COLORS.border,
+		borderRadius: SIZES.radius,
+		backgroundColor: COLORS.card,
+	},
 	textInput: {
 		flex: 1,
 		marginLeft: SIZES.sm,
 		fontSize: 16,
 		color: COLORS.text,
+		...(Platform.select({ web: ({ outlineStyle: 'none', outlineWidth: 0, outlineColor: 'transparent' } as any) })),
 	},
 	textArea: {
 		height: 80,
@@ -96,6 +113,20 @@ export const styles = StyleSheet.create({
 		padding: SIZES.md,
 		alignItems: 'center',
 	},
+	navigationRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+		padding: SIZES.md,
+	},
+	resendText: {
+		color: COLORS.primary,
+		fontWeight: '600',
+		fontSize: 14,
+	},
+	verifyButton: {
+		minWidth: 140,
+	},
 	backButtonText: {
 		fontSize: 16,
 		color: COLORS.textLight,
@@ -104,6 +135,56 @@ export const styles = StyleSheet.create({
 	},
 	nextButton: {
 		flex: 1,
+	},
+	// Error styles
+	errorContainer: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		backgroundColor: '#fef2f2',
+		borderColor: COLORS.error,
+		borderWidth: 1,
+		borderRadius: SIZES.radius,
+		padding: SIZES.md,
+		marginBottom: SIZES.lg,
+	},
+	registerErrorText: {
+		color: COLORS.error,
+		fontSize: 14,
+		marginLeft: SIZES.sm,
+		flex: 1,
+		lineHeight: 20,
+	},
+	errorDismissButton: {
+		width: 24,
+		height: 24,
+		borderRadius: 12,
+		backgroundColor: COLORS.error,
+		alignItems: 'center',
+		justifyContent: 'center',
+		marginLeft: SIZES.sm,
+	},
+	errorDismissText: {
+		color: COLORS.white,
+		fontSize: 16,
+		fontWeight: 'bold',
+		lineHeight: 16,
+	},
+	inputContainerError: {
+		borderColor: COLORS.error,
+		backgroundColor: '#fef2f2',
+		borderWidth: 1,
+	},
+	errorText: {
+		color: COLORS.error,
+		fontSize: 14,
+		marginTop: SIZES.sm,
+		marginLeft: SIZES.sm,
+	},
+	phonePrefix: {
+		fontSize: 16,
+		color: COLORS.text,
+		fontWeight: '500',
+		marginRight: SIZES.sm,
 	},
 });
 

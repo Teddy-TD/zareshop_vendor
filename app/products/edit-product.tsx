@@ -12,56 +12,66 @@ import {
   Switch,
   Image,
 } from 'react-native';
-import { ArrowLeft, Camera, Upload, X, Plus, ChevronDown } from 'lucide-react-native';
-import { router } from 'expo-router';
+import { ArrowLeft, Camera, Upload, X, Plus, ChevronDown, Save } from 'lucide-react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { COLORS, SIZES } from '@/constants/theme';
 import CustomButton from '@/components/CustomButton';
-import ProductUploadProgress from '@/components/ProductUploadProgress';
 import { 
+  useGetProductByIdQuery,
+  useGetCategoriesQuery, 
   useGetSubcategoriesByCategoryQuery,
-  useCreateProductMutation 
+  useUpdateProductMutation 
 } from '@/services/productApi';
-import { useGetUserVendorStatusQuery } from '@/services/applicationApi';
 import * as ImagePicker from 'expo-image-picker';
 
-export default function AddProductScreen() {
+export default function EditProductScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const productId = Number(id);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // API hooks
+  const { data: productData, isLoading: isLoadingProduct } = useGetProductByIdQuery(productId);
+  const { data: categoriesData, isLoading: isLoadingCategories } = useGetCategoriesQuery();
+  const { data: subcategoriesData, isLoading: isLoadingSubcategories } = useGetSubcategoriesByCategoryQuery(
+    Number(productData?.product?.category_id || 0),
+    { skip: !productData?.product?.category_id }
+  );
+  const [updateProduct, { isLoading: isUpdating }] = useUpdateProductMutation();
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     category_id: '',
     subcategory_id: '',
     stock: '',
-    price: '',
-    low_stock_threshold: '10',
     has_discount: false,
     specs: [] as string[],
   });
+
   const [images, setImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
-  const [video, setVideo] = useState<ImagePicker.ImagePickerAsset | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [videos, setVideos] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [existingImages, setExistingImages] = useState<any[]>([]);
+  const [existingVideos, setExistingVideos] = useState<any[]>([]);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showSubcategoryDropdown, setShowSubcategoryDropdown] = useState(false);
-  const [uploadJobs, setUploadJobs] = useState<any>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  // API hooks
-  const { data: vendorStatusData, isLoading: isLoadingVendorStatus } = useGetUserVendorStatusQuery();
-  const { data: subcategoriesData, isLoading: isLoadingSubcategories, error: subcategoryError } = useGetSubcategoriesByCategoryQuery(
-    Number(formData.category_id),
-    { skip: !formData.category_id || isNaN(Number(formData.category_id)) }
-  );
-
-  const [createProduct, { isLoading: isCreating }] = useCreateProductMutation();
-
-  // Set category from vendor status data
+  // Initialize form data when product loads
   useEffect(() => {
-    if (vendorStatusData?.vendor?.categories && vendorStatusData.vendor.categories.length > 0) {
-      const vendorCategory = vendorStatusData.vendor.categories[0]; // Use first category
-      setFormData(prev => ({ 
-        ...prev, 
-        category_id: vendorCategory.id.toString() 
-      }));
+    if (productData?.product) {
+      const product = productData.product;
+      setFormData({
+        name: product.name,
+        description: product.description || '',
+        category_id: product.category_id.toString(),
+        subcategory_id: product.subcategory_id.toString(),
+        stock: product.stock.toString(),
+        has_discount: product.has_discount,
+        specs: product.specs?.map(spec => `${spec.key}: ${spec.value}`) || [],
+      });
+      setExistingImages(product.images || []);
+      setExistingVideos(product.videos || []);
     }
-  }, [vendorStatusData]);
+  }, [productData]);
 
   const updateFormData = (key: string, value: string | boolean | number) => {
     setFormData(prev => ({ ...prev, [key]: value }));
@@ -69,73 +79,11 @@ export default function AddProductScreen() {
     if (key === 'category_id') {
       setFormData(prev => ({ ...prev, subcategory_id: '' }));
     }
-    // Clear field error when user starts typing
-    if (fieldErrors[key]) {
-      setFieldErrors(prev => ({ ...prev, [key]: '' }));
-    }
-  };
-
-  const validateField = (field: string, value: any) => {
-    let error = '';
-    
-    switch (field) {
-      case 'name':
-        if (!value || !value.trim()) {
-          error = 'Product name is required';
-        } else if (value.trim().length < 2) {
-          error = 'Product name must be at least 2 characters';
-        } else if (value.trim().length > 100) {
-          error = 'Product name must not exceed 100 characters';
-        }
-        break;
-      case 'description':
-        if (!value || !value.trim()) {
-          error = 'Product description is required';
-        } else if (value.trim().length < 10) {
-          error = 'Product description must be at least 10 characters';
-        } else if (value.trim().length > 1000) {
-          error = 'Product description must not exceed 1000 characters';
-        }
-        break;
-      case 'subcategory_id':
-        if (!value) {
-          error = 'Please select a subcategory';
-        }
-        break;
-      case 'stock':
-        if (!value || value === '') {
-          error = 'Stock quantity is required';
-        } else if (isNaN(Number(value)) || Number(value) < 0) {
-          error = 'Stock quantity must be a valid positive number';
-        } else if (Number(value) > 999999) {
-          error = 'Stock quantity must not exceed 999,999';
-        }
-        break;
-      case 'low_stock_threshold':
-        if (!value || value === '') {
-          error = 'Low stock threshold is required';
-        } else if (isNaN(Number(value)) || Number(value) < 0) {
-          error = 'Low stock threshold must be a valid positive number';
-        } else if (Number(value) > 999999) {
-          error = 'Low stock threshold must not exceed 999,999';
-        }
-        break;
-      case 'price':
-        if (!value || value === '') {
-          error = 'Price is required';
-        } else if (isNaN(Number(value)) || Number(value) < 0) {
-          error = 'Price must be a valid positive number';
-        }
-        break;
-    }
-    
-    setFieldErrors(prev => ({ ...prev, [field]: error }));
-    return !error;
   };
 
   const handleAddImage = async () => {
-    if (images.length >= 10) {
-      Alert.alert('Limit Reached', 'You can upload maximum 10 images');
+    if (images.length + existingImages.length >= 10) {
+      Alert.alert('Limit Reached', 'You can upload maximum 10 images total');
       return;
     }
 
@@ -165,9 +113,13 @@ export default function AddProductScreen() {
     setImages(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleRemoveExistingImage = (index: number) => {
+    setExistingImages(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleAddVideo = async () => {
-    if (video) {
-      Alert.alert('Video Exists', 'You can only upload one video per product');
+    if (videos.length + existingVideos.length >= 5) {
+      Alert.alert('Limit Reached', 'You can upload maximum 5 videos total');
       return;
     }
 
@@ -185,21 +137,25 @@ export default function AddProductScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        setVideo(result.assets[0]);
+        setVideos(prev => [...prev, result.assets[0]]);
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to pick video');
     }
   };
 
-  const handleRemoveVideo = () => {
-    setVideo(null);
+  const handleRemoveVideo = (index: number) => {
+    setVideos(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleRemoveExistingVideo = (index: number) => {
+    setExistingVideos(prev => prev.filter((_, i) => i !== index));
   };
 
   const getCategoryName = (id: string) => {
-    if (!vendorStatusData?.vendor?.categories) return 'Loading...';
-    const category = vendorStatusData.vendor.categories.find(cat => cat.id === Number(id));
-    return category?.name || 'Category not found';
+    if (!categoriesData?.categories) return 'Select Category';
+    const category = categoriesData.categories.find(cat => cat.id === Number(id));
+    return category?.name || 'Select Category';
   };
 
   const getSubcategoryName = (id: string) => {
@@ -209,32 +165,30 @@ export default function AddProductScreen() {
   };
 
   const validateForm = () => {
-    // Validate all fields
-    const nameValid = validateField('name', formData.name);
-    const descriptionValid = validateField('description', formData.description);
-    const subcategoryValid = validateField('subcategory_id', formData.subcategory_id);
-    const stockValid = validateField('stock', formData.stock);
-    const priceValid = validateField('price', formData.price);
-    const lowStockThresholdValid = validateField('low_stock_threshold', formData.low_stock_threshold);
-    
-    // Check category availability
+    if (!formData.name.trim()) {
+      Alert.alert('Error', 'Please enter product name');
+      return false;
+    }
+    if (!formData.description.trim()) {
+      Alert.alert('Error', 'Please enter product description');
+      return false;
+    }
     if (!formData.category_id) {
-      Alert.alert('Error', 'Category not available. Please try again later.');
+      Alert.alert('Error', 'Please select a category');
       return false;
     }
-    
-    // Check images
-    if (images.length === 0) {
-      Alert.alert('Error', 'Please upload at least one product image');
+    if (!formData.subcategory_id) {
+      Alert.alert('Error', 'Please select a subcategory');
       return false;
     }
-    
-    // Check if all validations passed
-    if (!nameValid || !descriptionValid || !subcategoryValid || !stockValid || !priceValid || !lowStockThresholdValid) {
-      Alert.alert('Validation Error', 'Please fix the highlighted fields before submitting.');
+    if (!formData.stock || Number(formData.stock) < 0) {
+      Alert.alert('Error', 'Please enter valid stock quantity');
       return false;
     }
-    
+    if (existingImages.length + images.length === 0) {
+      Alert.alert('Error', 'Please keep at least one product image');
+      return false;
+    }
     return true;
   };
 
@@ -245,13 +199,11 @@ export default function AddProductScreen() {
       setIsLoading(true);
       
       const productData: Record<string, any> = {
+        id: productId,
         name: formData.name.trim(),
         description: formData.description.trim(),
         stock: Number(formData.stock),
-        price: Number(formData.price),
-        low_stock_threshold: Number(formData.low_stock_threshold),
         has_discount: formData.has_discount,
-        vendor_id: 1, // TODO: Get from auth context
         category_id: Number(formData.category_id),
         subcategory_id: Number(formData.subcategory_id),
         specs: formData.specs.map(spec => {
@@ -267,12 +219,12 @@ export default function AddProductScreen() {
       Object.keys(productData).forEach(key => {
         if (key === 'specs') {
           formDataToSend.append(key, JSON.stringify(productData[key]));
-        } else {
+        } else if (key !== 'id') {
           formDataToSend.append(key, productData[key].toString());
         }
       });
 
-      // Add images
+      // Add new images
       images.forEach((image, index) => {
         const imageFile = {
           uri: image.uri,
@@ -282,40 +234,58 @@ export default function AddProductScreen() {
         formDataToSend.append('images', imageFile);
       });
 
-      // Add video if exists
-      if (video) {
+      // Add new videos if exists
+      videos.forEach((video, index) => {
         const videoFile = {
           uri: video.uri,
           type: 'video/mp4',
-          name: 'product_video.mp4',
+          name: `video_${index}.mp4`,
         } as any;
         formDataToSend.append('videos', videoFile);
-      }
+      });
 
-      const result = await createProduct(formDataToSend).unwrap();
-      
-      // Store upload jobs for progress tracking
-      if (result.uploadJobs) {
-        setUploadJobs(result.uploadJobs);
-      }
+      const result = await updateProduct({ id: productId, body: formDataToSend }).unwrap();
       
       Alert.alert(
         'Success',
-        'Product created successfully! Files are being processed in the background.',
+        'Product updated successfully! New files are being processed in the background.',
         [
           {
             text: 'OK',
-            onPress: () => {} // Don't go back, show upload progress
+            onPress: () => router.back()
           }
         ]
       );
     } catch (error: any) {
-      const errorMessage = error?.data?.error || error?.message || 'Failed to create product';
+      const errorMessage = error?.data?.error || error?.message || 'Failed to update product';
       Alert.alert('Error', errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
+
+  if (isLoadingProduct) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading product...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!productData?.product) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Product not found</Text>
+          <CustomButton title="Go Back" onPress={() => router.back()} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -329,15 +299,15 @@ export default function AddProductScreen() {
         >
           <ArrowLeft size={24} color={COLORS.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add New Product</Text>
+        <Text style={styles.headerTitle}>Edit Product</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Loading State */}
-        {isLoadingVendorStatus && (
+        {isLoadingCategories && (
           <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading vendor information...</Text>
+            <Text style={styles.loadingText}>Loading categories...</Text>
           </View>
         )}
 
@@ -348,46 +318,64 @@ export default function AddProductScreen() {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Product Name *</Text>
             <TextInput
-              style={[styles.textInput, fieldErrors.name && styles.inputError]}
+              style={styles.textInput}
               placeholder="Enter product name"
               value={formData.name}
               onChangeText={(value) => updateFormData('name', value)}
-              onBlur={() => validateField('name', formData.name)}
-              maxLength={100}
             />
-            {fieldErrors.name && <Text style={styles.errorText}>{fieldErrors.name}</Text>}
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Description *</Text>
             <TextInput
-              style={[styles.textInput, styles.textArea, fieldErrors.description && styles.inputError]}
+              style={[styles.textInput, styles.textArea]}
               placeholder="Describe your product in detail"
               value={formData.description}
               onChangeText={(value) => updateFormData('description', value)}
-              onBlur={() => validateField('description', formData.description)}
               multiline
               numberOfLines={4}
               textAlignVertical="top"
-              maxLength={1000}
             />
-            {fieldErrors.description && <Text style={styles.errorText}>{fieldErrors.description}</Text>}
           </View>
 
           <View style={styles.row}>
             <View style={[styles.inputGroup, styles.halfWidth]}>
               <Text style={styles.inputLabel}>Category *</Text>
-              <View style={[styles.dropdownButton, styles.readOnlyField]}>
-                <Text style={[styles.dropdownButtonText, styles.readOnlyText]}>
-                  {isLoadingVendorStatus ? 'Loading...' : getCategoryName(formData.category_id)}
+              <TouchableOpacity
+                style={styles.dropdownButton}
+                onPress={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                disabled={isLoadingCategories}
+              >
+                <Text style={[
+                  styles.dropdownButtonText,
+                  formData.category_id ? styles.dropdownButtonTextSelected : styles.dropdownButtonTextPlaceholder
+                ]}>
+                  {isLoadingCategories ? 'Loading...' : getCategoryName(formData.category_id)}
                 </Text>
-              </View>
+                <ChevronDown size={20} color={COLORS.textLight} />
+              </TouchableOpacity>
+              {showCategoryDropdown && categoriesData?.categories && (
+                <View style={styles.dropdownList}>
+                  {categoriesData.categories.map((category) => (
+                    <TouchableOpacity
+                      key={category.id}
+                      style={styles.dropdownItem}
+                      onPress={() => {
+                        updateFormData('category_id', category.id.toString());
+                        setShowCategoryDropdown(false);
+                      }}
+                    >
+                      <Text style={styles.dropdownItemText}>{category.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
             
             <View style={[styles.inputGroup, styles.halfWidth]}>
               <Text style={styles.inputLabel}>Subcategory *</Text>
               <TouchableOpacity
-                style={[styles.dropdownButton, fieldErrors.subcategory_id && styles.inputError]}
+                style={styles.dropdownButton}
                 onPress={() => setShowSubcategoryDropdown(!showSubcategoryDropdown)}
                 disabled={!formData.category_id || isLoadingSubcategories}
               >
@@ -415,7 +403,6 @@ export default function AddProductScreen() {
                   ))}
                 </View>
               )}
-              {fieldErrors.subcategory_id && <Text style={styles.errorText}>{fieldErrors.subcategory_id}</Text>}
             </View>
           </View>
         </View>
@@ -424,47 +411,15 @@ export default function AddProductScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Stock Information</Text>
           
-          <View style={styles.row}>
-            <View style={[styles.inputGroup, styles.halfWidth]}>
-              <Text style={styles.inputLabel}>Price *</Text>
-              <TextInput
-                style={[styles.textInput, fieldErrors.price && styles.inputError]}
-                placeholder="Enter price"
-                value={formData.price}
-                onChangeText={(value) => updateFormData('price', value)}
-                onBlur={() => validateField('price', formData.price)}
-                keyboardType="numeric"
-                maxLength={10}
-              />
-              {fieldErrors.price && <Text style={styles.errorText}>{fieldErrors.price}</Text>}
-            </View>
-            <View style={[styles.inputGroup, styles.halfWidth]}>
-              <Text style={styles.inputLabel}>Stock Quantity *</Text>
-              <TextInput
-                style={[styles.textInput, fieldErrors.stock && styles.inputError]}
-                placeholder="Enter available stock"
-                value={formData.stock}
-                onChangeText={(value) => updateFormData('stock', value)}
-                onBlur={() => validateField('stock', formData.stock)}
-                keyboardType="numeric"
-                maxLength={6}
-              />
-              {fieldErrors.stock && <Text style={styles.errorText}>{fieldErrors.stock}</Text>}
-            </View>
-
-            <View style={[styles.inputGroup, styles.halfWidth]}>
-              <Text style={styles.inputLabel}>Low Stock Threshold *</Text>
-              <TextInput
-                style={[styles.textInput, fieldErrors.low_stock_threshold && styles.inputError]}
-                placeholder="Alert when stock is below"
-                value={formData.low_stock_threshold}
-                onChangeText={(value) => updateFormData('low_stock_threshold', value)}
-                onBlur={() => validateField('low_stock_threshold', formData.low_stock_threshold)}
-                keyboardType="numeric"
-                maxLength={6}
-              />
-              {fieldErrors.low_stock_threshold && <Text style={styles.errorText}>{fieldErrors.low_stock_threshold}</Text>}
-            </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Stock Quantity *</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Enter available stock"
+              value={formData.stock}
+              onChangeText={(value) => updateFormData('stock', value)}
+              keyboardType="numeric"
+            />
           </View>
 
           <View style={styles.optionRow}>
@@ -482,9 +437,29 @@ export default function AddProductScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Product Media</Text>
           
-                     {/* Images */}
-           <View style={styles.inputGroup}>
-             <Text style={styles.inputLabel}>Product Images * (Max 10)</Text>
+          {/* Existing Images */}
+          {existingImages.length > 0 && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Existing Images</Text>
+              <View style={styles.mediaGrid}>
+                {existingImages.map((image, index) => (
+                  <View key={image.id} style={styles.mediaItem}>
+                    <Image source={{ uri: image.image_url }} style={styles.mediaPreview} />
+                    <TouchableOpacity
+                      style={styles.removeButton}
+                      onPress={() => handleRemoveExistingImage(index)}
+                    >
+                      <X size={16} color={COLORS.white} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* New Images */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Add New Images (Max {10 - existingImages.length})</Text>
             <View style={styles.mediaGrid}>
               {images.map((image, index) => (
                 <View key={index} style={styles.mediaItem}>
@@ -497,7 +472,7 @@ export default function AddProductScreen() {
                   </TouchableOpacity>
                 </View>
               ))}
-                             {images.length < 10 && (
+              {images.length + existingImages.length < 10 && (
                 <TouchableOpacity style={styles.addMediaButton} onPress={handleAddImage}>
                   <Plus size={24} color={COLORS.primary} />
                   <Text style={styles.addMediaText}>Add Image</Text>
@@ -506,24 +481,48 @@ export default function AddProductScreen() {
             </View>
           </View>
 
-          {/* Video */}
+          {/* Existing Videos */}
+          {existingVideos.length > 0 && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Existing Videos</Text>
+              <View style={styles.mediaGrid}>
+                {existingVideos.map((video, index) => (
+                  <View key={video.id} style={styles.mediaItem}>
+                    <Image source={{ uri: video.video_url }} style={styles.mediaPreview} />
+                    <TouchableOpacity
+                      style={styles.removeButton}
+                      onPress={() => handleRemoveExistingVideo(index)}
+                    >
+                      <X size={16} color={COLORS.white} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* New Videos */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Product Video (Optional)</Text>
-                         {video ? (
-               <View style={styles.videoContainer}>
-                 <Image source={{ uri: video.uri }} style={styles.videoPreview} />
-                 <TouchableOpacity
-                   style={styles.removeVideoButton}
-                   onPress={handleRemoveVideo}
-                 >
-                   <X size={16} color={COLORS.white} />
-                 </TouchableOpacity>
-               </View>
-             ) : (
+            <Text style={styles.inputLabel}>Add New Videos (Max {5 - existingVideos.length})</Text>
+            {videos.length + existingVideos.length < 5 ? (
               <TouchableOpacity style={styles.addVideoButton} onPress={handleAddVideo}>
                 <Camera size={24} color={COLORS.primary} />
                 <Text style={styles.addVideoText}>Add Video</Text>
               </TouchableOpacity>
+            ) : (
+              <View style={styles.videoContainer}>
+                {videos.map((video, index) => (
+                  <View key={index} style={styles.videoPreview}>
+                    <Image source={{ uri: video.uri }} style={styles.videoThumbnail} />
+                    <TouchableOpacity
+                      style={styles.removeVideoButton}
+                      onPress={() => handleRemoveVideo(index)}
+                    >
+                      <X size={16} color={COLORS.white} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
             )}
           </View>
         </View>
@@ -550,39 +549,20 @@ export default function AddProductScreen() {
               textAlignVertical="top"
             />
             <Text style={styles.helperText}>
-              Separate multiple specifications with commas. Format: Key: Value
+              Separate multiple specifications with commas
             </Text>
           </View>
         </View>
-
-        {/* Upload Progress */}
-        {uploadJobs && (
-          <ProductUploadProgress 
-            uploadJobs={uploadJobs}
-            onRefresh={() => {
-              // TODO: Implement refresh logic to check job status
-              Alert.alert('Info', 'Refresh functionality will be implemented to check job status');
-            }}
-          />
-        )}
       </ScrollView>
 
       {/* Submit Button */}
       <View style={styles.bottomContainer}>
-        {!uploadJobs ? (
-          <CustomButton
-            title="Add Product"
-            onPress={handleSubmit}
-            loading={isLoading || isCreating}
-            style={styles.submitButton}
-          />
-        ) : (
-          <CustomButton
-            title="Done"
-            onPress={() => router.back()}
-            style={styles.submitButton}
-          />
-        )}
+        <CustomButton
+          title="Update Product"
+          onPress={handleSubmit}
+          loading={isLoading || isUpdating}
+          style={styles.submitButton}
+        />
       </View>
     </SafeAreaView>
   );
@@ -740,10 +720,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   videoContainer: {
-    position: 'relative',
+    flexDirection: 'row',
+    gap: SIZES.sm,
   },
   videoPreview: {
-    width: '100%',
+    position: 'relative',
+  },
+  videoThumbnail: {
+    width: 120,
     height: 120,
     borderRadius: SIZES.radius,
     borderWidth: 1,
@@ -805,6 +789,17 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
     textAlign: 'center',
   },
+  errorContainer: {
+    padding: SIZES.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    color: COLORS.error,
+    marginBottom: SIZES.lg,
+    textAlign: 'center',
+  },
   sectionSubtitle: {
     fontSize: 14,
     color: COLORS.textLight,
@@ -816,24 +811,5 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
     marginTop: SIZES.xs,
     fontStyle: 'italic',
-  },
-  readOnlyField: {
-    backgroundColor: COLORS.lightGray,
-    borderColor: COLORS.border,
-    opacity: 0.7,
-  },
-  readOnlyText: {
-    color: COLORS.text,
-    fontWeight: '600',
-  },
-  inputError: {
-    borderColor: COLORS.error,
-    borderWidth: 1,
-  },
-  errorText: {
-    color: COLORS.error,
-    fontSize: 12,
-    marginTop: 4,
-    fontFamily: 'System',
   },
 });

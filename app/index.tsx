@@ -1,11 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   SafeAreaView,
   StatusBar,
-  Image,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -21,46 +20,46 @@ import { useAuth } from '@/hooks/useAuth';
 
 export default function SplashScreen() {
   const { isAuthenticated, isLoading } = useAuth();
+  const [isMounted, setIsMounted] = useState(false);
   const logoScale = useSharedValue(0);
   const logoOpacity = useSharedValue(0);
   const titleOpacity = useSharedValue(0);
   const titleTranslateY = useSharedValue(30);
 
   useEffect(() => {
-    // Logo animation
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    // Only start animation if mounted and not loading
+    if (!isMounted || isLoading) return;
+
+    // Start animation immediately
     logoScale.value = withSequence(
       withTiming(1.2, { duration: 600 }),
       withTiming(1, { duration: 200 })
     );
     logoOpacity.value = withTiming(1, { duration: 600 });
 
-    // Title animation
+    // Title animation with navigation
     titleOpacity.value = withDelay(300, withTiming(1, { duration: 600 }));
     titleTranslateY.value = withDelay(
       300,
       withTiming(0, { duration: 600 }, () => {
-        runOnJS(navigateToApp)();
+        runOnJS(navigateAfterSplash)();
       })
     );
-  }, []);
+  }, [isMounted, isLoading]);
 
-  const navigateToApp = () => {
+  const navigateAfterSplash = () => {
+    // Add a small delay to ensure navigation is ready
     setTimeout(() => {
-      // Wait for authentication state to be restored
-      if (isLoading) {
-        // If still loading, wait a bit more
-        setTimeout(navigateToApp, 500);
-        return;
-      }
-      
       if (isAuthenticated) {
-        // User is logged in, go to main app
         router.replace('/(tabs)');
       } else {
-        // User is not logged in, go to onboarding
-        router.replace('/onboarding');
+        router.replace('/auth/login');
       }
-    }, 1500);
+    }, 100);
   };
 
   const logoAnimatedStyle = useAnimatedStyle(() => ({
@@ -72,6 +71,24 @@ export default function SplashScreen() {
     opacity: titleOpacity.value,
     transform: [{ translateY: titleTranslateY.value }],
   }));
+
+  // Show loading state while auth is being restored or not mounted
+  if (isLoading || !isMounted) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <View style={styles.content}>
+          <View style={styles.logoContainer}>
+            <View style={styles.logoCircle}>
+              <Text style={styles.logoText}>Z</Text>
+            </View>
+          </View>
+          <Text style={styles.title}>Zareshop</Text>
+          <Text style={styles.subtitle}>Vendor</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>

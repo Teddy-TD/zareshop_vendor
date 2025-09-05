@@ -129,3 +129,9 @@ const [createVendor] = useCreateIndividualVendorMutation();
 - Network errors are handled by RTK Query
 - Authentication errors (401) should redirect to login
 - Token expiration is handled by backend validation
+
+
+
+
+
+

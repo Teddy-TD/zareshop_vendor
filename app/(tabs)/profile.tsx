@@ -14,9 +14,11 @@ import { COLORS, SIZES } from '@/constants/theme';
 import AnimatedCard from '@/components/AnimatedCard';
 import { useAuth } from '@/hooks/useAuth';
 import AuthDebug from '@/components/AuthDebug';
+import { useGetUserProfileQuery } from '@/services/authApi';
 
 export default function Profile() {
   const { user, logout } = useAuth();
+  const { data: profile, isLoading, error, refetch } = useGetUserProfileQuery();
   
   const MenuSection = ({ title, items, delay = 0 }: { 
     title: string; 
@@ -70,7 +72,7 @@ export default function Profile() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Profile</Text>
-        <TouchableOpacity style={styles.settingsButton}>
+        <TouchableOpacity style={styles.settingsButton} onPress={() => refetch()}>
           <Settings size={20} color={COLORS.primary} />
         </TouchableOpacity>
       </View>
@@ -79,6 +81,18 @@ export default function Profile() {
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
       >
+        {/* Loading / Error */}
+        {isLoading && (
+          <View style={{ paddingHorizontal: SIZES.md, paddingVertical: SIZES.md }}>
+            <Text style={{ color: COLORS.textLight }}>Loading profile…</Text>
+          </View>
+        )}
+        {error && (
+          <View style={{ paddingHorizontal: SIZES.md, paddingVertical: SIZES.md }}>
+            <Text style={{ color: COLORS.error }}>Failed to load profile</Text>
+          </View>
+        )}
+
         {/* Profile Card */}
         <AnimatedCard delay={0} style={styles.profileCard}>
           <View style={styles.profileHeader}>
@@ -94,8 +108,8 @@ export default function Profile() {
               </TouchableOpacity>
             </View>
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{user?.name || 'Vendor'}</Text>
-              <Text style={styles.profileType}>{user?.type === 'vendor_owner' ? 'Vendor Owner' : 'Vendor'}</Text>
+              <Text style={styles.profileName}>{profile?.name || user?.name || 'Vendor'}</Text>
+              <Text style={styles.profileType}>{(profile?.type || user?.type) === 'vendor_owner' ? 'Vendor Owner' : 'Vendor'}</Text>
               <View style={styles.statusBadge}>
                 <View style={styles.statusDot} />
                 <Text style={styles.statusText}>Active</Text>
@@ -154,13 +168,13 @@ export default function Profile() {
             {
               icon: Phone,
               label: 'Phone Number',
-              value: user?.phone_number || 'Not provided',
+              value: profile?.phone_number || user?.phone_number || 'Not provided',
               onPress: () => {},
             },
             {
               icon: Mail,
               label: 'Email Address',
-              value: user?.email || 'Not provided',
+              value: profile?.email || user?.email || 'Not provided',
               onPress: () => {},
             },
           ]}
