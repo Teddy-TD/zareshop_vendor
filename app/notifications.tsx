@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,88 +13,72 @@ import { Bell, Package, CreditCard, AlertCircle, CheckCircle, Clock, X, ArrowLef
 import { router } from 'expo-router';
 import { COLORS, SIZES } from '@/constants/theme';
 import AnimatedCard from '@/components/AnimatedCard';
+import { useAuth } from '@/hooks/useAuth';
+import { 
+  useGetUserNotificationsQuery,
+  useGetUserUnreadCountQuery,
+  useMarkNotificationReadMutation,
+  useDeleteNotificationMutation,
+  useMarkAllReadMutation,
+} from '@/services/notificationApi';
 
 export default function NotificationsScreen() {
-  const [notifications] = useState([
-    {
-      id: 1,
-      type: 'order',
-      title: 'New Order Received',
-      message: 'You have received a new order #12345 for 2,450 ETB',
-      time: '2 minutes ago',
-      isRead: false,
-      icon: Package,
-      color: COLORS.primary,
-    },
-    {
-      id: 2,
-      type: 'payout',
-      title: 'Payout Confirmed',
-      message: 'Your payout of 45,200 ETB has been processed successfully',
-      time: '1 hour ago',
-      isRead: false,
-      icon: CreditCard,
-      color: COLORS.success,
-    },
-    {
-      id: 3,
-      type: 'stock',
-      title: 'Low Stock Alert',
-      message: 'Product "Ethiopian Coffee Beans" is running low on stock (5 remaining)',
-      time: '3 hours ago',
-      isRead: true,
-      icon: AlertCircle,
-      color: COLORS.warning,
-    },
-    {
-      id: 4,
-      type: 'order',
-      title: 'Order Cancelled',
-      message: 'Order #12344 has been cancelled by the customer',
-      time: '5 hours ago',
-      isRead: true,
-      icon: Package,
-      color: COLORS.error,
-    },
-    {
-      id: 5,
-      type: 'system',
-      title: 'Account Verified',
-      message: 'Your vendor account has been verified and activated',
-      time: '1 day ago',
-      isRead: true,
-      icon: CheckCircle,
-      color: COLORS.success,
-    },
-    {
-      id: 6,
-      type: 'promotion',
-      title: 'Promotion Opportunity',
-      message: 'Boost your sales with our featured product promotion',
-      time: '2 days ago',
-      isRead: true,
-      icon: Bell,
-      color: COLORS.primary,
-    },
-  ]);
+  const { user } = useAuth();
+  const userId = user ? Number(user.id) : undefined;
+
+  const { data, isLoading, refetch } = useGetUserNotificationsQuery(
+    { userId: userId as number, page: 1, limit: 50 },
+    { skip: !userId }
+  );
+  const { data: unread } = useGetUserUnreadCountQuery(userId as number, { skip: !userId });
+  const [markRead] = useMarkNotificationReadMutation();
+  const [deleteNotification] = useDeleteNotificationMutation();
+  const [markAllRead] = useMarkAllReadMutation();
+
+  const notifications = data?.notifications || [];
+
+  const computedStats = useMemo(() => {
+    const byType = notifications.reduce<Record<string, number>>((acc, n) => {
+      acc[n.type] = (acc[n.type] || 0) + 1;
+      return acc;
+    }, {});
+    return byType;
+  }, [notifications]);
 
   const getNotificationIcon = (notification: any) => {
-    const IconComponent = notification.icon;
+    const map: Record<string, any> = {
+      order: Package,
+      payout: CreditCard,
+      stock: AlertCircle,
+      system: CheckCircle,
+      promotion: Bell,
+      default: Bell,
+    };
+    const IconComponent = map[notification.type] || map.default;
+    const colorMap: Record<string, string> = {
+      order: COLORS.primary,
+      payout: COLORS.success,
+      stock: COLORS.warning,
+      system: COLORS.success,
+      promotion: COLORS.primary,
+      default: COLORS.primary,
+    };
+    const color = colorMap[notification.type] || colorMap.default;
     return (
-      <View style={[styles.notificationIcon, { backgroundColor: notification.color + '20' }]}>
-        <IconComponent size={20} color={notification.color} />
+      <View style={[styles.notificationIcon, { backgroundColor: color + '20' }]}>
+        <IconComponent size={20} color={color} />
       </View>
     );
   };
 
-  const markAsRead = (id: number) => {
-    // This would typically update the notification status
-    console.log('Mark as read:', id);
+  const markAsReadHandler = async (id: number) => {
+    await markRead(id).unwrap();
+    refetch();
   };
 
-  const deleteNotification = (id: number) => {
-    // This would typically remove the notification
-    console.log('Delete notification:', id);
+  const deleteNotificationHandler = async (id: number) => {
+    await deleteNotification(id).unwrap();
+    refetch();
   };
 
   const renderNotification = ({ item, index }: { item: any; index: number }) => (
@@ -107,30 +91,30 @@ export default function NotificationsScreen() {
           <Text style={styles.notificationTime}>{item.time}</Text>
         </View>
         <View style={styles.notificationActions}>
-          {!item.isRead && (
+          {!item.is_read && (
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => markAsRead(item.id)}
+              onPress={() => markAsReadHandler(item.id)}
             >
               <CheckCircle size={16} color={COLORS.success} />
             </TouchableOpacity>
           )}
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => deleteNotification(item.id)}
+            onPress={() => deleteNotificationHandler(item.id)}
           >
             <X size={16} color={COLORS.error} />
           </TouchableOpacity>
         </View>
       </View>
       
-      {!item.isRead && (
-        <View style={[styles.unreadIndicator, { backgroundColor: item.color }]} />
+      {!item.is_read && (
+        <View style={[styles.unreadIndicator, { backgroundColor: COLORS.primary }]} />
       )}
     </AnimatedCard>
   );
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const unreadCount = unread?.count || 0;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -151,7 +135,7 @@ export default function NotificationsScreen() {
               <Text style={styles.unreadCount}>{unreadCount}</Text>
             </View>
           )}
-          <TouchableOpacity style={styles.markAllButton}>
+          <TouchableOpacity style={styles.markAllButton} onPress={() => userId && markAllRead(userId)}>
             <Text style={styles.markAllText}>Mark All Read</Text>
           </TouchableOpacity>
         </View>
@@ -200,7 +184,7 @@ export default function NotificationsScreen() {
       />
 
       {/* Empty State */}
-      {notifications.length === 0 && (
+      {(!isLoading && notifications.length === 0) && (
         <View style={styles.emptyState}>
           <Bell size={48} color={COLORS.textLight} />
           <Text style={styles.emptyStateTitle}>No Notifications</Text>

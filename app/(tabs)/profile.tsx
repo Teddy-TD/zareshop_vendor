@@ -109,7 +109,14 @@ export default function Profile() {
             </View>
             <View style={styles.profileInfo}>
               <Text style={styles.profileName}>{profile?.name || user?.name || 'Vendor'}</Text>
-              <Text style={styles.profileType}>{(profile?.type || user?.type) === 'vendor_owner' ? 'Vendor Owner' : 'Vendor'}</Text>
+              <Text style={styles.profileType}>{
+                (profile?.type || user?.type) === 'vendor_owner' ? 'Vendor Owner' : 
+                (profile?.type || user?.type) === 'client' ? 'Client' :
+                (profile?.type || user?.type) === 'driver' ? 'Driver' :
+                (profile?.type || user?.type) === 'admin' ? 'Admin' :
+                (profile?.type || user?.type) === 'employee' ? 'Employee' :
+                'User'
+              }</Text>
               <View style={styles.statusBadge}>
                 <View style={styles.statusDot} />
                 <Text style={styles.statusText}>Active</Text>
@@ -135,30 +142,32 @@ export default function Profile() {
         </AnimatedCard>
 
         {/* Store Information */}
-        <MenuSection
-          title="Store Information"
-          delay={100}
-          items={[
-            {
-              icon: Store,
-              label: 'Store Name',
-              value: "John's Electronics",
-              onPress: () => {},
-            },
-            {
-              icon: MapPin,
-              label: 'Address',
-              value: 'Addis Ababa, Ethiopia',
-              onPress: () => {},
-            },
-            {
-              icon: Clock,
-              label: 'Business Hours',
-              value: '9:00 AM - 6:00 PM',
-              onPress: () => {},
-            },
-          ]}
-        />
+        {(profile as any)?.vendor && (
+          <MenuSection
+            title="Store Information"
+            delay={100}
+            items={[
+              {
+                icon: Store,
+                label: 'Store Name',
+                value: (profile as any)?.vendor?.name || 'Not set',
+                onPress: () => {},
+              },
+              {
+                icon: MapPin,
+                label: 'Store Type',
+                value: (profile as any)?.vendor?.type === 'individual' ? 'Individual' : 'Business',
+                onPress: () => {},
+              },
+              {
+                icon: Clock,
+                label: 'Status',
+                value: (profile as any)?.vendor?.is_approved ? 'Approved' : 'Pending Approval',
+                onPress: () => {},
+              },
+            ]}
+          />
+        )}
 
         {/* Contact Information */}
         <MenuSection
@@ -179,6 +188,29 @@ export default function Profile() {
             },
           ]}
         />
+
+        {/* Wallet Information (for vendors) */}
+        {(profile as any)?.vendor?.wallet && (
+          <MenuSection
+            title="Wallet Information"
+            delay={250}
+            items={[
+              {
+                icon: Store,
+                label: 'Wallet Balance',
+                value: `${(profile as any)?.vendor?.wallet?.balance?.toLocaleString() || 0} ETB`,
+                onPress: () => {},
+              },
+              {
+                icon: Clock,
+                label: 'Wallet Status',
+                value: (profile as any)?.vendor?.wallet?.status === 'active' ? 'Active' : 
+                       (profile as any)?.vendor?.wallet?.status === 'suspended' ? 'Suspended' : 'Closed',
+                onPress: () => {},
+              },
+            ]}
+          />
+        )}
 
         {/* Account Settings */}
         <MenuSection

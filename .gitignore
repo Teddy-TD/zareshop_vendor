@@ -15,6 +15,9 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+ZARE/
+
+
 # metro
 .metro-health-check*
 
