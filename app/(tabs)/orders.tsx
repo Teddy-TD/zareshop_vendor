@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,80 +7,90 @@ import {
   SafeAreaView,
   StatusBar,
   TouchableOpacity,
+  Alert,
+  TextInput,
+  ActivityIndicator,
+  FlatList,
 } from 'react-native';
-import { Clock, Package, Truck, CircleCheck as CheckCircle, Circle as XCircle, Filter, Search } from 'lucide-react-native';
+import { Clock, Package, Truck, CircleCheck as CheckCircle, Circle as XCircle, Filter, Search, DollarSign, ShoppingCart } from 'lucide-react-native';
 import { COLORS, SIZES } from '@/constants/theme';
 import AnimatedCard from '@/components/AnimatedCard';
+import { useOrderManagement } from '@/hooks/useOrderManagement';
+import { OrderStatus } from '@/services/orderApi';
+import { useAuth } from '@/hooks/useAuth';
+import { useGetVendorByPhoneQuery } from '@/services/vendorApi';
+import { cleanPhoneNumber } from '@/validations/login_validation';
+import { useRouter } from 'expo-router';
 
 export default function Orders() {
-  const [orders] = useState([
-    {
-      id: '#12345',
-      customer: 'John Doe',
-      items: 2,
-      total: '1,450 ETB',
-      status: 'pending',
-      date: '2024-01-15',
-      time: '10:30 AM',
-    },
-    {
-      id: '#12344',
-      customer: 'Sarah Smith',
-      items: 1,
-      total: '280 ETB',
-      status: 'ready',
-      date: '2024-01-15',
-      time: '09:15 AM',
-    },
-    {
-      id: '#12343',
-      customer: 'Mike Johnson',
-      items: 3,
-      total: '2,100 ETB',
-      status: 'delivered',
-      date: '2024-01-14',
-      time: '02:45 PM',
-    },
-    {
-      id: '#12342',
-      customer: 'Emma Wilson',
-      items: 1,
-      total: '890 ETB',
-      status: 'cancelled',
-      date: '2024-01-14',
-      time: '11:20 AM',
-    },
-  ]);
+  const { user } = useAuth();
+  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Get vendor information by phone number
+  const cleanedPhoneNumber = user?.phone_number ? cleanPhoneNumber(user.phone_number) : '';
+  const { 
+    data: vendorData, 
+    isLoading: isLoadingVendor, 
+    error: vendorError 
+  } = useGetVendorByPhoneQuery(cleanedPhoneNumber, {
+    skip: !cleanedPhoneNumber
+  });
 
-  const getStatusConfig = (status: string) => {
+  const vendorId = vendorData?.vendor?.id;
+  
+  const {
+    orders,
+    statusCounts,
+    isLoadingOrders,
+    isUpdatingStatus,
+    ordersError,
+    handleStatusUpdate,
+    handleStatusFilter,
+    handleSearch,
+    clearFilters,
+    refetchOrders,
+    currentStatus,
+    currentSearch,
+  } = useOrderManagement({
+    vendorId: vendorId || 0,
+    initialPage: 1,
+    initialLimit: 10,
+  });
+
+  // Calculate additional stats
+  const totalRevenue = orders.reduce((sum, order) => sum + order.total_amount, 0);
+  const averageOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0;
+
+  const getStatusConfig = (status: OrderStatus) => {
     switch (status) {
-      case 'pending':
+      case OrderStatus.new:
         return {
           color: COLORS.warning,
           icon: Clock,
-          text: 'Pending',
+          text: 'New',
           bgColor: '#fff3cd',
         };
-      case 'ready':
+      case OrderStatus.processing:
         return {
           color: COLORS.primary,
           icon: Package,
-          text: 'Ready for Delivery',
+          text: 'Processing',
           bgColor: COLORS.secondary,
         };
-      case 'delivered':
+      case OrderStatus.ready_to_delivery:
+        return {
+          color: COLORS.success,
+          icon: Truck,
+          text: 'Ready for Delivery',
+          bgColor: '#d1edff',
+        };
+      case OrderStatus.completed:
         return {
           color: COLORS.success,
           icon: CheckCircle,
-          text: 'Delivered',
+          text: 'Completed',
           bgColor: '#d1edff',
-        };
-      case 'cancelled':
-        return {
-          color: COLORS.error,
-          icon: XCircle,
-          text: 'Cancelled',
-          bgColor: '#f8d7da',
         };
       default:
         return {
@@ -92,6 +102,19 @@ export default function Orders() {
     }
   };
 
+  const handleOrderStatusUpdate = async (orderId: number, newStatus: OrderStatus) => {
+    const result = await handleStatusUpdate(orderId, newStatus);
+    if (result.success) {
+      Alert.alert('Success', 'Order status updated successfully');
+    } else {
+      Alert.alert('Error', 'Failed to update order status');
+    }
+  };
+
+  const handleSearchSubmit = () => {
+    handleSearch(searchQuery);
+  };
+
   const OrderCard = ({ order, delay = 0 }: { order: any; delay?: number }) => {
     const statusConfig = getStatusConfig(order.status);
     const IconComponent = statusConfig.icon;
@@ -100,8 +123,10 @@ export default function Orders() {
       <AnimatedCard delay={delay} style={styles.orderCard}>
         <View style={styles.orderHeader}>
           <View style={styles.orderInfo}>
-            <Text style={styles.orderId}>{order.id}</Text>
-            <Text style={styles.customerName}>{order.customer}</Text>
+            <Text style={styles.orderId}>#{order.id}</Text>
+            <Text style={styles.customerName}>
+              {order.client.user.name || order.client.user.phone_number}
+            </Text>
           </View>
           <View 
             style={[
@@ -118,27 +143,52 @@ export default function Orders() {
         
         <View style={styles.orderDetails}>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Items:</Text>
-            <Text style={styles.detailValue}>{order.items}</Text>
+            <Text style={styles.detailLabel}>Product:</Text>
+            <Text style={styles.detailValue}>{order.product.name}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Quantity:</Text>
+            <Text style={styles.detailValue}>{order.quantity}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Total:</Text>
-            <Text style={styles.detailValue}>{order.total}</Text>
+            <Text style={styles.detailValue}>${order.total_amount}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Date:</Text>
-            <Text style={styles.detailValue}>{order.date} at {order.time}</Text>
+            <Text style={styles.detailValue}>
+              {new Date(order.created_at).toLocaleDateString()} at{' '}
+              {new Date(order.created_at).toLocaleTimeString()}
+            </Text>
           </View>
         </View>
 
         <View style={styles.orderActions}>
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => router.push(`/orders/${order.id}`)}
+          >
             <Text style={styles.actionText}>View Details</Text>
           </TouchableOpacity>
-          {order.status === 'pending' && (
-            <TouchableOpacity style={[styles.actionButton, styles.primaryAction]}>
+          {order.status === OrderStatus.new && (
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.primaryAction]}
+              onPress={() => handleOrderStatusUpdate(order.id, OrderStatus.processing)}
+              disabled={isUpdatingStatus}
+            >
               <Text style={[styles.actionText, styles.primaryActionText]}>
-                Mark Ready
+                {isUpdatingStatus ? 'Updating...' : 'Mark Processing'}
+              </Text>
+            </TouchableOpacity>
+          )}
+          {order.status === OrderStatus.processing && (
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.primaryAction]}
+              onPress={() => handleOrderStatusUpdate(order.id, OrderStatus.ready_to_delivery)}
+              disabled={isUpdatingStatus}
+            >
+              <Text style={[styles.actionText, styles.primaryActionText]}>
+                {isUpdatingStatus ? 'Updating...' : 'Ready for Delivery'}
               </Text>
             </TouchableOpacity>
           )}
@@ -147,12 +197,59 @@ export default function Orders() {
     );
   };
 
-  const statusCounts = {
-    pending: orders.filter(o => o.status === 'pending').length,
-    ready: orders.filter(o => o.status === 'ready').length,
-    delivered: orders.filter(o => o.status === 'delivered').length,
-    cancelled: orders.filter(o => o.status === 'cancelled').length,
-  };
+  // Loading and error states
+  if (isLoadingVendor) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading vendor information...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (vendorError || !vendorId) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <View style={styles.centerContainer}>
+          <Text style={styles.errorText}>Vendor not found or error loading vendor data</Text>
+          <Text style={styles.errorSubText}>
+            Please make sure you're logged in with a vendor account{'\n'}
+            Phone: {user?.phone_number || 'Not available'}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (isLoadingOrders) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading orders...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (ordersError) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <View style={styles.centerContainer}>
+          <Text style={styles.errorText}>Error loading orders</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={refetchOrders}>
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -170,35 +267,103 @@ export default function Orders() {
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
           <Search size={20} color={COLORS.textLight} />
-          <Text style={styles.searchPlaceholder}>Search orders...</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search orders..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onSubmitEditing={handleSearchSubmit}
+            returnKeyType="search"
+          />
         </View>
       </View>
 
-      {/* Order Stats */}
-      <ScrollView 
+      {/* 2x2 Dashboard Grid */}
+      <View style={styles.dashboardGrid}>
+        {/* Row 1 */}
+        <View style={styles.dashboardRow}>
+          <TouchableOpacity 
+            style={[styles.dashboardCard, styles.revenueCard]}
+            onPress={() => handleStatusFilter(undefined)}
+          >
+            <View style={styles.cardHeader}>
+              <DollarSign size={24} color={COLORS.success} />
+              <Text style={styles.cardTitle}>Total Revenue</Text>
+            </View>
+            <Text style={styles.cardValue}>${totalRevenue.toFixed(2)}</Text>
+            <Text style={styles.cardSubtext}>All time</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.dashboardCard, styles.ordersCard]}
+            onPress={() => handleStatusFilter(undefined)}
+          >
+            <View style={styles.cardHeader}>
+              <ShoppingCart size={24} color={COLORS.primary} />
+              <Text style={styles.cardTitle}>Total Orders</Text>
+            </View>
+            <Text style={styles.cardValue}>{statusCounts.all}</Text>
+            <Text style={styles.cardSubtext}>All orders</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Row 2 */}
+        <View style={styles.dashboardRow}>
+          <TouchableOpacity 
+            style={[styles.dashboardCard, styles.newOrdersCard]}
+            onPress={() => handleStatusFilter(OrderStatus.new)}
+          >
+            <View style={styles.cardHeader}>
+              <Clock size={24} color={COLORS.warning} />
+              <Text style={styles.cardTitle}>New Orders</Text>
+            </View>
+            <Text style={styles.cardValue}>{statusCounts.new}</Text>
+            <Text style={styles.cardSubtext}>Pending review</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.dashboardCard, styles.processingCard]}
+            onPress={() => handleStatusFilter(OrderStatus.processing)}
+          >
+            <View style={styles.cardHeader}>
+              <Package size={24} color={COLORS.primary} />
+              <Text style={styles.cardTitle}>Processing</Text>
+            </View>
+            <Text style={styles.cardValue}>{statusCounts.processing}</Text>
+            <Text style={styles.cardSubtext}>In progress</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Status Filter Pills */}
+      {/* <ScrollView 
         horizontal 
         showsHorizontalScrollIndicator={false}
-        style={styles.statsScroll}
+        style={styles.filterScroll}
       >
-        <View style={styles.statsContainer}>
-          <View style={[styles.statCard, { borderLeftColor: COLORS.warning }]}>
-            <Text style={styles.statValue}>{statusCounts.pending}</Text>
-            <Text style={styles.statLabel}>Pending</Text>
-          </View>
-          <View style={[styles.statCard, { borderLeftColor: COLORS.primary }]}>
-            <Text style={styles.statValue}>{statusCounts.ready}</Text>
-            <Text style={styles.statLabel}>Ready</Text>
-          </View>
-          <View style={[styles.statCard, { borderLeftColor: COLORS.success }]}>
-            <Text style={styles.statValue}>{statusCounts.delivered}</Text>
-            <Text style={styles.statLabel}>Delivered</Text>
-          </View>
-          <View style={[styles.statCard, { borderLeftColor: COLORS.error }]}>
-            <Text style={styles.statValue}>{statusCounts.cancelled}</Text>
-            <Text style={styles.statLabel}>Cancelled</Text>
-          </View>
+        <View style={styles.filterContainer}>
+          <TouchableOpacity 
+            style={[styles.filterPill, !currentStatus && styles.activeFilterPill]}
+            onPress={() => handleStatusFilter(undefined)}
+          >
+            <Text style={[styles.filterPillText, !currentStatus && styles.activeFilterPillText]}>
+              All Orders
+            </Text>
+          </TouchableOpacity>
+          
+          {Object.values(OrderStatus).map((status) => (
+            <TouchableOpacity
+              key={status}
+              style={[styles.filterPill, currentStatus === status && styles.activeFilterPill]}
+              onPress={() => handleStatusFilter(status)}
+            >
+              <Text style={[styles.filterPillText, currentStatus === status && styles.activeFilterPillText]}>
+                {status.replace('_', ' ').toUpperCase()}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
-      </ScrollView>
+      </ScrollView> */}
 
       {/* Orders List */}
       <ScrollView 
@@ -380,5 +545,134 @@ const styles = StyleSheet.create({
   primaryActionText: {
     color: COLORS.white,
     fontWeight: '600',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SIZES.lg,
+  },
+  loadingText: {
+    marginTop: SIZES.md,
+    fontSize: 16,
+    color: COLORS.textLight,
+  },
+  errorText: {
+    fontSize: 16,
+    color: COLORS.error,
+    textAlign: 'center',
+    marginBottom: SIZES.md,
+  },
+  retryButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SIZES.lg,
+    paddingVertical: SIZES.md,
+    borderRadius: SIZES.radius,
+  },
+  retryText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: SIZES.sm,
+    fontSize: 16,
+    color: COLORS.text,
+  },
+  // Dashboard Grid Styles
+  dashboardGrid: {
+    paddingHorizontal: SIZES.md,
+    marginBottom: SIZES.md,
+  },
+  dashboardRow: {
+    flexDirection: 'row',
+    marginBottom: SIZES.sm,
+    gap: SIZES.sm,
+  },
+  dashboardCard: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    borderRadius: SIZES.radius,
+    padding: SIZES.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    minHeight: 100,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SIZES.sm,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textLight,
+    marginLeft: SIZES.xs,
+  },
+  cardValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginBottom: SIZES.xs,
+  },
+  cardSubtext: {
+    fontSize: 12,
+    color: COLORS.textLight,
+  },
+  revenueCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.success,
+  },
+  ordersCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+  },
+  newOrdersCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.warning,
+  },
+  processingCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+  },
+  // Filter Pills Styles
+  filterScroll: {
+    paddingLeft: SIZES.md,
+    marginBottom: SIZES.md,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    paddingRight: SIZES.md,
+    gap: SIZES.sm,
+  },
+  filterPill: {
+    paddingHorizontal: SIZES.md,
+    paddingVertical: SIZES.sm,
+    borderRadius: 20,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  activeFilterPill: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  filterPillText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.textLight,
+  },
+  activeFilterPillText: {
+    color: COLORS.white,
+  },
+  errorSubText: {
+    fontSize: 14,
+    color: COLORS.textLight,
+    textAlign: 'center',
+    marginTop: SIZES.sm,
   },
 });

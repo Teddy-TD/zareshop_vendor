@@ -49,6 +49,64 @@ type ResendOtpResponse  = {
 	}
 }
 
+type Wallet = {
+	id: number;
+	balance: number;
+	status: 'active' | 'suspended' | 'closed';
+	created_at: string;
+	updated_at: string;
+};
+
+type Subscription = {
+	id: number;
+	name: string;
+	description?: string;
+	price: number;
+	duration_days: number;
+	features: string[];
+	created_at: string;
+};
+
+type Vendor = {
+	id: number;
+	name?: string;
+	type: 'individual' | 'business';
+	description?: string;
+	status?: boolean;
+	is_approved?: boolean;
+	subscription?: Subscription;
+	wallet?: Wallet;
+};
+
+type Client = {
+	id: number;
+	image?: {
+		id: number;
+		image_url: string;
+	};
+	wallet?: Wallet;
+};
+
+type Driver = {
+	id: number;
+	vehicle_info?: string;
+	current_status: 'available' | 'on_delivery' | 'offline';
+	isApproved: boolean;
+	profile_image?: {
+		id: number;
+		image_url: string;
+	};
+	license_image?: {
+		id: number;
+		image_url: string;
+	};
+	fayda_image?: {
+		id: number;
+		image_url: string;
+	};
+	wallet?: Wallet;
+};
+
 type UserProfileResponse = {
 	id: string;
 	name: string;
@@ -57,6 +115,10 @@ type UserProfileResponse = {
 	type: string;
 	is_verified: boolean;
 	isotpVerified: boolean;
+	created_at: string;
+	client?: Client;
+	vendor?: Vendor;
+	driver?: Driver;
 };
 
 type RequestPasswordResetRequest = {
@@ -181,5 +243,7 @@ export const {
 	useVerifyResetOtpMutation,
 	useResetPasswordMutation
 } = authApi;
+
+export type { UserProfileResponse, Vendor, Client, Driver, Wallet, Subscription };
 
 
