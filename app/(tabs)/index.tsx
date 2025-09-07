@@ -13,12 +13,47 @@ import { router } from 'expo-router';
 import { COLORS, SIZES } from '@/constants/theme';
 import StatsCard from '@/components/StatsCard';
 import AnimatedCard from '@/components/AnimatedCard';
+import { useAuth } from '@/hooks/useAuth';
+import { useGetVendorByPhoneQuery } from '@/services/vendorApi';
+import { useGetOrdersStatsQuery } from '@/services/orderApi';
+import { useGetProductsByStockStatusQuery } from '@/services/productApi';
+import { useGetUserUnreadCountQuery } from '@/services/notificationApi';
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  const phone = user?.phone_number || '';
+
+  const { data: vendorData } = useGetVendorByPhoneQuery(phone, {
+    skip: !phone,
+  });
+
+  const vendorId = vendorData?.vendor?.id;
+  const userId = vendorData?.user?.id;
+  const { data: unread } = useGetUserUnreadCountQuery(userId as number, { skip: !userId });
+
+  const { data: orderStats, isLoading: isLoadingStats } = useGetOrdersStatsQuery(
+    { vendorId: vendorId as number },
+    { skip: !vendorId }
+  );
+
+  const { data: lowStock } = useGetProductsByStockStatusQuery(
+    { status: 'low_stock', vendor_id: vendorId as number, page: 1, limit: 1 },
+    { skip: !vendorId }
+  );
+
+  const { data: outOfStock } = useGetProductsByStockStatusQuery(
+    { status: 'out_of_stock', vendor_id: vendorId as number, page: 1, limit: 1 },
+    { skip: !vendorId }
+  );
+
+  const activeProductsCount = (lowStock?.pagination?.total || 0) + (outOfStock?.pagination?.total || 0);
+  const lowStockCount = lowStock?.pagination?.total || 0;
+  const outOfStockCount = outOfStock?.pagination?.total || 0;
+
   const salesData = [
-    { period: 'Today', amount: '12,450', orders: 23 },
-    { period: 'This Week', amount: '87,320', orders: 145 },
-    { period: 'This Month', amount: '324,780', orders: 567 },
+    { period: 'Today', amount: String(orderStats?.total_revenue || 0), orders: orderStats?.total_orders || 0 },
+    { period: 'Processing', amount: '', orders: orderStats?.processing_orders || 0 },
+    { period: 'Completed', amount: '', orders: orderStats?.completed_orders || 0 },
   ];
 
   return (
@@ -40,51 +75,54 @@ export default function Dashboard() {
             onPress={() => router.push('/notifications')}
           >
             <Bell size={24} color={COLORS.text} />
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationCount}>3</Text>
-            </View>
+            {(unread?.count || 0) > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationCount}>{Math.min(unread?.count || 0, 99)}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
         {/* Quick Stats */}
         <View style={styles.statsRow}>
           <StatsCard
-            title="Today's Sales"
-            value="12,450 ETB"
-            subtitle="23 orders"
+            title="Total Revenue"
+            value={`${orderStats?.total_revenue || 0} ETB`}
+            subtitle={`${orderStats?.completed_orders || 0} completed orders`}
             icon={<DollarSign size={16} color={COLORS.primary} />}
-            trend="up"
-            trendValue="+12%"
+            trend="neutral"
+            trendValue=""
             delay={0}
           />
           <StatsCard
-            title="Total Revenue"
-            value="324,780 ETB"
-            subtitle="This month"
+            title="Total Orders"
+            value={`${orderStats?.total_orders || 0}`}
+            subtitle={`Processing: ${orderStats?.processing_orders || 0}`}
             icon={<TrendingUp size={16} color={COLORS.primary} />}
-            trend="up"
-            trendValue="+24%"
+            trend="neutral"
+            trendValue=""
             delay={100}
           />
         </View>
 
         <View style={styles.statsRow}>
           <StatsCard
-            title="Active Products"
-            value="156"
-            subtitle="12 out of stock"
+            title="Stock Overview"
+            value={`${activeProductsCount}`}
+            subtitle={`${lowStockCount} low, ${outOfStockCount} out`
+            }
             icon={<ShoppingBag size={16} color={COLORS.warning} />}
             trend="neutral"
-            trendValue="2 pending"
+            trendValue=""
             delay={200}
           />
           <StatsCard
-            title="Low Stock Alerts"
-            value="8"
-            subtitle="Need attention"
+            title="Ready to Deliver"
+            value={`${orderStats?.ready_to_delivery_orders || 0}`}
+            subtitle="Orders waiting dispatch"
             icon={<AlertTriangle size={16} color={COLORS.error} />}
-            trend="down"
-            trendValue="Urgent"
+            trend="neutral"
+            trendValue=""
             delay={300}
           />
         </View>
