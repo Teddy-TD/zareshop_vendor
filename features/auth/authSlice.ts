@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
 import { tokenStorage } from '@/utils/tokenStorage';
+import { isTokenExpired, isVendorToken } from '@/utils/jwtUtils';
 
 export type AuthUser = {
 	id: string;
@@ -33,6 +34,22 @@ export const restoreAuth = createAsyncThunk(
 			tokenStorage.getUser(),
 		]);
 		console.log('📦 Restored data:', { token: !!token, user: !!user });
+		
+		// Validate restored token
+		if (token) {
+			if (isTokenExpired(token)) {
+				console.log('❌ Restored token is expired, clearing auth data');
+				await tokenStorage.removeToken();
+				return { token: null, user: null };
+			}
+			
+			if (!isVendorToken(token)) {
+				console.log('❌ Restored token is not for vendor user, clearing auth data');
+				await tokenStorage.removeToken();
+				return { token: null, user: null };
+			}
+		}
+		
 		return { token, user };
 	}
 );

@@ -308,24 +308,7 @@ export const orderApi = baseApi.injectEndpoints({
       providesTags: ["Orders"],
     }),
 
-    // Get orders statistics for vendor
-    getOrdersStats: build.query<
-      {
-        total_orders: number;
-        pending_orders: number;
-        processing_orders: number;
-        ready_to_delivery_orders: number;
-        completed_orders: number;
-        total_revenue: number;
-      },
-      { vendorId: number }
-    >({
-      query: ({ vendorId }) => ({
-        url: `orders/vendor/${vendorId}/stats`,
-        method: "GET",
-      }),
-      providesTags: ["Orders"],
-    }),
+    // Note: stats endpoint is not available on the backend yet. Remove or implement when backend supports it.
   }),
   overrideExisting: true,
 });
@@ -337,5 +320,4 @@ export const {
   useUpdateOrderStatusMutation,
   useGetOrdersByStatusQuery,
   useSearchOrdersQuery,
-  useGetOrdersStatsQuery,
 } = orderApi;

@@ -52,8 +52,8 @@ export default function RegisterScreen() {
         const { hasVendor, vendor } = result.data;
         
         if (!hasVendor) {
-          console.log('🔍 No vendor found, redirecting to application');
-          router.replace('/auth/application');
+          console.log('🔍 No vendor found, redirecting to vendor registration');
+          router.replace('/auth/vendor-registration' as any);
         } else if (vendor && !vendor.isApproved) {
           console.log('🔍 Vendor exists but not approved, redirecting to pending approval');
           router.replace('/auth/pending-approval');
@@ -61,17 +61,17 @@ export default function RegisterScreen() {
           console.log('🔍 Vendor approved, redirecting to main app');
           router.replace('/(tabs)');
         } else {
-          console.log('🔍 Unknown vendor status, redirecting to application');
-          router.replace('/auth/application');
+          console.log('🔍 Unknown vendor status, redirecting to vendor registration');
+          router.replace('/auth/vendor-registration' as any);
         }
       } else {
-        console.log('🔍 Could not fetch vendor status, redirecting to application');
-        router.replace('/auth/application');
+        console.log('🔍 Could not fetch vendor status, redirecting to vendor registration');
+        router.replace('/auth/vendor-registration' as any);
       }
     } catch (error) {
       console.error('Error checking vendor status:', error);
-      // If there's an error, redirect to application as fallback
-      router.replace('/auth/application');
+      // If there's an error, redirect to vendor registration as fallback
+      router.replace('/auth/vendor-registration' as any);
     }
   };
 

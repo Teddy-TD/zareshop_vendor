@@ -40,7 +40,7 @@ export default function OrderDetail() {
     const configs = {
       new: { color: COLORS.primary, label: 'New Order', icon: 'add-circle' },
       processing: { color: COLORS.warning, label: 'Processing', icon: 'time' },
-      ready_to_delivery: { color: COLORS.info, label: 'Ready for Delivery', icon: 'checkmark-circle' },
+      ready_to_delivery: { color: COLORS.primary, label: 'Ready for Delivery', icon: 'checkmark-circle' },
       completed: { color: COLORS.success, label: 'Completed', icon: 'checkmark-done' },
     };
     return configs[status] || configs.new;
@@ -59,7 +59,7 @@ export default function OrderDetail() {
     const configs = {
       not_assigned: { color: COLORS.gray, label: 'Not Assigned', icon: 'help-circle' },
       assigned: { color: COLORS.warning, label: 'Assigned', icon: 'person' },
-      out_for_delivery: { color: COLORS.info, label: 'Out for Delivery', icon: 'car' },
+      out_for_delivery: { color: COLORS.primary, label: 'Out for Delivery', icon: 'car' },
       delivered: { color: COLORS.success, label: 'Delivered', icon: 'checkmark-circle' },
     };
     return configs[status as keyof typeof configs] || configs.not_assigned;
@@ -202,9 +202,9 @@ export default function OrderDetail() {
           </View>
           
           <View style={styles.productCard}>
-            {order.product.images && order.product.images.length > 0 && (
+            {order.product.images && order.product.images.length > 0 && order.product.images[0]?.image_url && (
               <Image 
-                source={{ uri: order.product.images[0].url }} 
+                source={{ uri: order.product.images[0].image_url }} 
                 style={styles.productImage}
                 resizeMode="cover"
               />
@@ -314,10 +314,10 @@ export default function OrderDetail() {
             </View>
             
             <View style={styles.statusButtons}>
-              {order.status === 'new' && (
+              {order.status === OrderStatus.new && (
                 <TouchableOpacity 
                   style={[styles.statusButton, styles.processingButton]}
-                  onPress={() => showStatusUpdateModal('processing')}
+                  onPress={() => showStatusUpdateModal(OrderStatus.processing)}
                   disabled={isUpdating}
                 >
                   <Ionicons name="time" size={20} color={COLORS.white} />
@@ -325,10 +325,10 @@ export default function OrderDetail() {
                 </TouchableOpacity>
               )}
               
-              {order.status === 'processing' && (
+              {order.status === OrderStatus.processing && (
                 <TouchableOpacity 
                   style={[styles.statusButton, styles.readyButton]}
-                  onPress={() => showStatusUpdateModal('ready_to_delivery')}
+                  onPress={() => showStatusUpdateModal(OrderStatus.ready_to_delivery)}
                   disabled={isUpdating}
                 >
                   <Ionicons name="checkmark-circle" size={20} color={COLORS.white} />
@@ -336,10 +336,10 @@ export default function OrderDetail() {
                 </TouchableOpacity>
               )}
               
-              {order.status === 'ready_to_delivery' && (
+              {order.status === OrderStatus.ready_to_delivery && (
                 <TouchableOpacity 
                   style={[styles.statusButton, styles.completeButton]}
-                  onPress={() => showStatusUpdateModal('completed')}
+                  onPress={() => showStatusUpdateModal(OrderStatus.completed)}
                   disabled={isUpdating}
                 >
                   <Ionicons name="checkmark-done" size={20} color={COLORS.white} />
@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
     padding: SIZES.base,
   },
   headerTitle: {
-    fontSize: SIZES.h3,
+    fontSize: SIZES.xl,
     fontWeight: 'bold',
     color: COLORS.black,
   },
@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: SIZES.base,
-    fontSize: SIZES.body3,
+    fontSize: SIZES.md,
     color: COLORS.gray,
   },
   errorContainer: {
@@ -401,14 +401,14 @@ const styles = StyleSheet.create({
     padding: SIZES.padding,
   },
   errorText: {
-    fontSize: SIZES.h3,
+    fontSize: SIZES.xl,
     fontWeight: 'bold',
     color: COLORS.error,
     marginTop: SIZES.base,
     textAlign: 'center',
   },
   errorSubText: {
-    fontSize: SIZES.body3,
+    fontSize: SIZES.md,
     color: COLORS.gray,
     marginTop: SIZES.base,
     textAlign: 'center',
@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
   },
   retryButtonText: {
     color: COLORS.white,
-    fontSize: SIZES.body2,
+    fontSize: SIZES.lg,
     fontWeight: '600',
   },
   statusCard: {
@@ -446,17 +446,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statusLabel: {
-    fontSize: SIZES.h3,
+    fontSize: SIZES.xl,
     fontWeight: 'bold',
     color: COLORS.black,
   },
   orderId: {
-    fontSize: SIZES.body3,
+    fontSize: SIZES.md,
     color: COLORS.gray,
     marginTop: 2,
   },
   orderDate: {
-    fontSize: SIZES.body3,
+    fontSize: SIZES.md,
     color: COLORS.gray,
   },
   sectionCard: {
@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
     marginBottom: SIZES.base,
   },
   sectionTitle: {
-    fontSize: SIZES.h4,
+    fontSize: SIZES.lg,
     fontWeight: 'bold',
     color: COLORS.black,
     marginLeft: SIZES.base,
@@ -480,19 +480,19 @@ const styles = StyleSheet.create({
     paddingVertical: SIZES.base / 2,
   },
   infoLabel: {
-    fontSize: SIZES.body3,
+    fontSize: SIZES.md,
     color: COLORS.gray,
     flex: 1,
   },
   infoValue: {
-    fontSize: SIZES.body2,
+    fontSize: SIZES.lg,
     color: COLORS.black,
     fontWeight: '500',
     flex: 2,
     textAlign: 'right',
   },
   totalAmount: {
-    fontSize: SIZES.h4,
+    fontSize: SIZES.lg,
     fontWeight: 'bold',
     color: COLORS.primary,
   },
@@ -510,13 +510,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   productName: {
-    fontSize: SIZES.h4,
+    fontSize: SIZES.lg,
     fontWeight: 'bold',
     color: COLORS.black,
     marginBottom: 4,
   },
   productDescription: {
-    fontSize: SIZES.body3,
+    fontSize: SIZES.md,
     color: COLORS.gray,
     marginBottom: SIZES.base / 2,
   },
@@ -525,12 +525,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   categoryText: {
-    fontSize: SIZES.body4,
+    fontSize: SIZES.sm,
     color: COLORS.primary,
     fontWeight: '500',
   },
   stockText: {
-    fontSize: SIZES.body4,
+    fontSize: SIZES.sm,
     color: COLORS.gray,
   },
   orderDetails: {
@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
     marginRight: SIZES.base,
   },
   deliveryStatusText: {
-    fontSize: SIZES.body2,
+    fontSize: SIZES.lg,
     fontWeight: '600',
     color: COLORS.black,
   },
@@ -572,14 +572,14 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.warning,
   },
   readyButton: {
-    backgroundColor: COLORS.info,
+    backgroundColor: COLORS.primary,
   },
   completeButton: {
     backgroundColor: COLORS.success,
   },
   statusButtonText: {
     color: COLORS.white,
-    fontSize: SIZES.body2,
+    fontSize: SIZES.md,
     fontWeight: '600',
   },
 });

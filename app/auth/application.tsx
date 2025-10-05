@@ -14,15 +14,18 @@ import {
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import { ArrowLeft, Camera, ChevronDown, X, Building2, User } from 'lucide-react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { COLORS, FONTS, SIZES } from '@/constants/theme';
 import CustomButton from '@/components/CustomButton';
 import ImageUploader from '@/components/Image_Uploader';
-import { useCreateIndividualVendorMutation, useCreateBusinessVendorMutation, useGetCategoriesQuery, useGetSubscriptionsQuery, useGetUserVendorStatusQuery } from '@/services/applicationApi';
+import { useCreateIndividualVendorMutation, useCreateBusinessVendorMutation, useGetCategoriesQuery, useGetSubscriptionsQuery, useGetUserVendorStatusQuery, useCreateRegistrationPaymentMutation } from '@/services/applicationApi';
 import { useAppSelector } from '@/store/hooks';
 import * as ImagePicker from 'expo-image-picker';
 
 export default function ApplicationScreen() {
+  const { payment_id } = useLocalSearchParams();
+  const existingPaymentId = payment_id ? Number(payment_id) : null;
+  
   const [step, setStep] = useState<1 | 2>(1);
   const [vendorType, setVendorType] = useState<'individual' | 'business'>('individual');
   const [name, setName] = useState('');
@@ -35,17 +38,33 @@ export default function ApplicationScreen() {
   const [accountNumber, setAccountNumber] = useState('');
   const [accountHolder, setAccountHolder] = useState('');
   const [paymentProvider, setPaymentProvider] = useState('');
+  const [addressLine1, setAddressLine1] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showSubscriptionDropdown, setShowSubscriptionDropdown] = useState(false);
+  const [showPaymentProviderDropdown, setShowPaymentProviderDropdown] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
   const user = useAppSelector(state => state.auth.user);
   const [createIndividualVendor] = useCreateIndividualVendorMutation();
   const [createBusinessVendor] = useCreateBusinessVendorMutation();
   const { data: categoriesData, isLoading: categoriesLoading } = useGetCategoriesQuery();
   const { data: subscriptionsData, isLoading: subscriptionsLoading } = useGetSubscriptionsQuery();
   const { refetch: refetchVendorStatus } = useGetUserVendorStatusQuery(undefined, { skip: true });
+  const [createRegistrationPayment] = useCreateRegistrationPaymentMutation();
+
+  // Payment provider options based on backend validation
+  const paymentProviderOptions = [
+    { value: 'bank_transfer', label: 'Bank Transfer (CBE, Dashen, etc.)' },
+    { value: 'mobile_money', label: 'Mobile Money (Telebirr, M-Birr)' },
+    { value: 'cash', label: 'Cash Payment' },
+    { value: 'check', label: 'Check Payment' },
+  ];
+
+  const getPaymentProviderLabel = (value: string) => {
+    const option = paymentProviderOptions.find(opt => opt.value === value);
+    return option ? option.label : value;
+  };
 
   const checkVendorStatusAndRoute = async () => {
     try {
@@ -152,15 +171,13 @@ export default function ApplicationScreen() {
 
   const createPaymentMethodJSON = () => {
     return JSON.stringify({
-      name: paymentMethod || 'Mobile Payment',
+      name: paymentMethod,
       account_number: accountNumber,
       account_holder: accountHolder,
-      type: paymentProvider || 'Mobile Money',
-      details: {
-        provider: paymentProvider || 'Mobile Payment',
-        branch: 'Addis Ababa',
-        notes: 'Use this account for all mobile payments.'
-      }
+      // optional per backend schema (allow null, '')
+      type: paymentProvider || '',
+      // backend defaults to {}; send minimal
+      details: {}
     });
   };
 
@@ -172,10 +189,10 @@ export default function ApplicationScreen() {
     if (msg.includes('license')) return 'businessLicenseImage';
     if (msg.includes('category')) return 'selectedCategory';
     if (msg.includes('subscription')) return 'selectedSubscription';
-    // if (msg.includes('payment method')) return 'paymentMethod';
-    // if (msg.includes('account number')) return 'accountNumber';
-    // if (msg.includes('account holder')) return 'accountHolder';
-    // if (msg.includes('payment provider')) return 'paymentProvider';
+    if (msg.includes('payment method')) return 'paymentMethod';
+    if (msg.includes('account number')) return 'accountNumber';
+    if (msg.includes('account holder')) return 'accountHolder';
+    if (msg.includes('address_line1') || msg.includes('address line1') || msg.includes('address')) return 'addressLine1';
     return null;
   };
 
@@ -195,14 +212,16 @@ export default function ApplicationScreen() {
       error = 'Please select a category';
     } else if (field === 'selectedSubscription' && !value) {
       error = 'Please select a subscription plan';
-    // } else if (field === 'paymentMethod' && (!value || (typeof value === 'string' && !value.trim()))) {
-    //   error = 'Payment method name is required';
-    // } else if (field === 'accountNumber' && (!value || (typeof value === 'string' && !value.trim()))) {
-    //   error = 'Account number is required';
-    // } else if (field === 'accountHolder' && (!value || (typeof value === 'string' && !value.trim()))) {
-    //   error = 'Account holder name is required';
-    // } else if (field === 'paymentProvider' && (!value || (typeof value === 'string' && !value.trim()))) {
-    //   error = 'Payment provider is required';
+    } else if (field === 'paymentMethod' && (!value || (typeof value === 'string' && !value.trim()))) {
+      error = 'Payment method name is required';
+    } else if (field === 'accountNumber' && (!value || (typeof value === 'string' && !value.trim()))) {
+      error = 'Account number is required';
+    } else if (field === 'accountHolder' && (!value || (typeof value === 'string' && !value.trim()))) {
+      error = 'Account holder name is required';
+    } else if (field === 'paymentProvider' && (!value || (typeof value === 'string' && !value.trim()))) {
+      error = 'Please select a payment provider';
+    } else if (field === 'addressLine1' && (!value || (typeof value === 'string' && value.trim().length < 3))) {
+      error = 'Address line1 is required';
     }
     setFieldErrors(prev => ({ ...prev, [field]: error }));
     return error;
@@ -219,10 +238,12 @@ export default function ApplicationScreen() {
     }
     errors.selectedCategory = validateField('selectedCategory', selectedCategory);
     // errors.selectedSubscription = validateField('selectedSubscription', selectedSubscription);
-    // errors.paymentMethod = validateField('paymentMethod', paymentMethod);
-    // errors.accountNumber = validateField('accountNumber', accountNumber);
-    // errors.accountHolder = validateField('accountHolder', accountHolder);
-    // errors.paymentProvider = validateField('paymentProvider', paymentProvider);
+    errors.paymentMethod = validateField('paymentMethod', paymentMethod);
+    errors.accountNumber = validateField('accountNumber', accountNumber);
+    errors.accountHolder = validateField('accountHolder', accountHolder);
+    // Payment provider is now required
+    errors.paymentProvider = validateField('paymentProvider', paymentProvider);
+    errors.addressLine1 = validateField('addressLine1', addressLine1);
     return Object.fromEntries(Object.entries(errors).filter(([_, v]) => v)) as Record<string, string>;
   };
 
@@ -244,10 +265,11 @@ export default function ApplicationScreen() {
         businessLicenseImage: 'Business license image',
         selectedCategory: 'Business category',
         selectedSubscription: 'Subscription plan',
-        // paymentMethod: 'Payment method name',
-        // accountNumber: 'Account number',
-        // accountHolder: 'Account holder name',
-        // paymentProvider: 'Payment provider',
+        paymentMethod: 'Payment method name',
+        accountNumber: 'Account number',
+        accountHolder: 'Account holder name',
+        paymentProvider: 'Payment provider',
+        addressLine1: 'Address line1',
       };
       const list = Object.keys(errors)
         .map((key) => `• ${fieldLabels[key] || key}: ${errors[key]}`)
@@ -260,8 +282,30 @@ export default function ApplicationScreen() {
     setIsLoading(true);
 
     try {
-      // const paymentMethodJSON = createPaymentMethodJSON();
+      const paymentMethodJSON = createPaymentMethodJSON();
       // console.log('Payment method JSON:', paymentMethodJSON);
+
+      let paymentId = existingPaymentId;
+      let paymentResponse = null;
+
+      // Use existing payment ID if available, otherwise create new payment
+      if (!paymentId) {
+        console.log('Creating new registration payment...');
+        paymentResponse = await createRegistrationPayment({
+          user_id: Number(user.id),
+          subscription_id: Number(selectedSubscription),
+          payment_method: 'manual',
+          payment_provider: paymentProvider || undefined as any,
+        }).unwrap();
+        paymentId = paymentResponse?.data?.payment?.id;
+        if (!paymentId) {
+          throw new Error('Failed to create payment. Please try again.');
+        }
+      } else {
+        console.log('Using existing payment ID:', paymentId);
+        // For existing payments, assume they are completed since we're coming from payment flow
+        paymentResponse = { data: { payment: { id: paymentId, status: 'completed' } } };
+      }
 
       if (vendorType === 'individual') {
         console.log('Submitting individual vendor...');
@@ -277,17 +321,95 @@ export default function ApplicationScreen() {
           const uploadFile = await normalizeUploadFile(faydaImage, 'fayda');
           formData.append('fayda_image', uploadFile as any);
         }
+        console.log('done a few')
         formData.append('category_ids', JSON.stringify([Number(selectedCategory)]));
-        // formData.append('payment_method', paymentMethodJSON);
+        formData.append('payment_method', paymentMethodJSON);
         formData.append('subscription_id', String(Number(selectedSubscription)));
+        formData.append('address_line1', addressLine1.trim());
+        formData.append('payment_id', String(paymentId));
+        console.log('done a lot')
 
-        const result = await createIndividualVendor(formData).unwrap();
-        console.log('Individual vendor result:', result);
+        try {
+          console.log('Sending request to create individual vendor...');
+          console.log('FormData contents:');
+          // Log formData contents for debugging (RN FormData lacks entries())
+          const appendedKeys = [
+            'name',
+            ...(coverImage ? ['cover_image'] : []),
+            ...(faydaImage ? ['fayda_image'] : []),
+            'category_ids',
+            'payment_method',
+            'subscription_id',
+            'address_line1',
+            'payment_id',
+          ];
+          const canIterate = typeof (formData as any).entries === 'function' && Platform.OS === 'web';
+          if (canIterate) {
+            for (const pair of (formData as any).entries()) {
+              const [key, value] = pair as [string, any];
+              if (typeof File !== 'undefined' && value instanceof File) {
+                console.log(`${key}:`, { name: value.name, type: value.type, size: value.size });
+              } else {
+                console.log(`${key}:`, value);
+              }
+            }
+          } else {
+            console.log('FormData prepared (no entries support). Keys:', appendedKeys);
+          }
+          
+          console.log('Initiating API call...');
+          console.log('Env/base URL/platform:', {
+            baseUrl: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000/api',
+            platform: Platform.OS,
+          });
 
-        if (result.success) {
-          router.replace('/auth/pending-approval');
-        } else {
-          Alert.alert('Error', result.message || 'Failed to submit application');
+          // Apply a 30s timeout and abort the mutation if it takes too long
+          const mutationPromise = createIndividualVendor(formData);
+          const abortable: any = mutationPromise;
+          const result = await Promise.race([
+            mutationPromise.unwrap(),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => {
+                try { if (typeof abortable?.abort === 'function') abortable.abort(); } catch {}
+                reject(new Error('Request timed out'));
+              }, 30000)
+            ),
+          ]).catch(error => {
+            console.error('API Error Details:', {
+              status: error?.status,
+              data: error?.data,
+              error: error?.error || error?.message,
+              originalStatus: error?.originalStatus,
+              statusCode: error?.statusCode,
+            });
+            throw error;
+          });
+          console.log('Individual vendor result:', result);
+
+          if (result.success) {
+            // Application submitted successfully - now waiting for admin review
+            Alert.alert(
+              'Application Submitted Successfully! 🎉',
+              'Your complete vendor application (including payment proof and vendor details) has been submitted for admin review.\n\nYou will be notified once the admin approves your application.',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => router.replace('/auth/pending-approval')
+                }
+              ]
+            );
+          } else {
+            console.error('Vendor creation failed:', result);
+            Alert.alert('Error', result.message || 'Failed to submit application');
+          }
+        } catch (error) {
+          console.error('Error in createIndividualVendor:', error);
+          Alert.alert(
+            'Error',
+            'An error occurred while submitting your application. Please try again.'
+          );
+        } finally {
+          setIsLoading(false);
         }
       } else {
         console.log('Submitting business vendor...');
@@ -304,14 +426,26 @@ export default function ApplicationScreen() {
           formData.append('business_license_image', uploadFile as any);
         }
         formData.append('category_ids', JSON.stringify([Number(selectedCategory)]));
-        // formData.append('payment_method', paymentMethodJSON);
+        formData.append('payment_method', paymentMethodJSON);
         formData.append('subscription_id', String(Number(selectedSubscription)));
+        formData.append('address_line1', addressLine1.trim());
+        formData.append('payment_id', String(paymentId));
 
         const result = await createBusinessVendor(formData).unwrap();
         console.log('Business vendor result:', result);
 
         if (result.success) {
-          router.replace('/auth/pending-approval');
+          // Application submitted successfully - now waiting for admin review
+          Alert.alert(
+            'Application Submitted Successfully! 🎉',
+            'Your complete vendor application (including payment proof and vendor details) has been submitted for admin review.\n\nYou will be notified once the admin approves your application.',
+            [
+              {
+                text: 'OK',
+                onPress: () => router.replace('/auth/pending-approval')
+              }
+            ]
+          );
         } else {
           Alert.alert('Error', result.message || 'Failed to submit application');
         }
@@ -355,7 +489,15 @@ export default function ApplicationScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        onTouchStart={() => {
+          setShowCategoryDropdown(false);
+          setShowSubscriptionDropdown(false);
+          setShowPaymentProviderDropdown(false);
+        }}
+      >
         {step === 1 && (
           <>
             <Text style={styles.stepHeadline}>Step 1 of 2</Text>
@@ -495,7 +637,96 @@ export default function ApplicationScreen() {
               {fieldErrors.selectedSubscription && <Text style={styles.errorHelperText}>{fieldErrors.selectedSubscription}</Text>}
             </View>
 
-          
+            <View style={styles.inputSection}>
+              <Text style={styles.inputLabel}>Address Line 1 *</Text>
+              <TextInput
+                style={[styles.textInput, fieldErrors.addressLine1 && styles.inputErrorBorder]}
+                placeholder="Enter your address"
+                value={addressLine1}
+                onChangeText={(text) => {
+                  setAddressLine1(text);
+                  validateField('addressLine1', text);
+                }}
+                autoCapitalize="sentences"
+              />
+              {fieldErrors.addressLine1 && <Text style={styles.errorHelperText}>{fieldErrors.addressLine1}</Text>}
+            </View>
+
+            <View style={styles.inputSection}>
+              <Text style={styles.inputLabel}>Payment Method Name *</Text>
+              <TextInput
+                style={[styles.textInput, fieldErrors.paymentMethod && styles.inputErrorBorder]}
+                placeholder="e.g., Mobile Money"
+                value={paymentMethod}
+                onChangeText={(text) => {
+                  setPaymentMethod(text);
+                  validateField('paymentMethod', text);
+                }}
+              />
+              {fieldErrors.paymentMethod && <Text style={styles.errorHelperText}>{fieldErrors.paymentMethod}</Text>}
+            </View>
+
+            <View style={styles.inputSection}>
+              <Text style={styles.inputLabel}>Account Number *</Text>
+              <TextInput
+                style={[styles.textInput, fieldErrors.accountNumber && styles.inputErrorBorder]}
+                placeholder="Enter account number"
+                value={accountNumber}
+                onChangeText={(text) => {
+                  setAccountNumber(text);
+                  validateField('accountNumber', text);
+                }}
+                keyboardType="number-pad"
+              />
+              {fieldErrors.accountNumber && <Text style={styles.errorHelperText}>{fieldErrors.accountNumber}</Text>}
+            </View>
+
+            <View style={styles.inputSection}>
+              <Text style={styles.inputLabel}>Account Holder *</Text>
+              <TextInput
+                style={[styles.textInput, fieldErrors.accountHolder && styles.inputErrorBorder]}
+                placeholder="Enter account holder name"
+                value={accountHolder}
+                onChangeText={(text) => {
+                  setAccountHolder(text);
+                  validateField('accountHolder', text);
+                }}
+                autoCapitalize="words"
+              />
+              {fieldErrors.accountHolder && <Text style={styles.errorHelperText}>{fieldErrors.accountHolder}</Text>}
+            </View>
+
+            <View style={styles.inputSection}>
+              <Text style={styles.inputLabel}>Payment Provider *</Text>
+              <TouchableOpacity
+                style={[styles.textInput, styles.dropdownButton]}
+                onPress={() => setShowPaymentProviderDropdown(!showPaymentProviderDropdown)}
+              >
+                <Text style={[styles.dropdownButtonText, !paymentProvider && { color: COLORS.textLight }]}>
+                  {paymentProvider ? getPaymentProviderLabel(paymentProvider) : 'Select payment provider'}
+                </Text>
+                <ChevronDown size={20} color={COLORS.textLight} />
+              </TouchableOpacity>
+              
+              {showPaymentProviderDropdown && (
+                <View style={styles.dropdownList}>
+                  {paymentProviderOptions.map((option) => (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={styles.dropdownItem}
+                      onPress={() => {
+                        setPaymentProvider(option.value);
+                        setShowPaymentProviderDropdown(false);
+                        validateField('paymentProvider', option.value);
+                      }}
+                    >
+                      <Text style={styles.dropdownItemText}>{option.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+              {fieldErrors.paymentProvider && <Text style={styles.errorHelperText}>{fieldErrors.paymentProvider}</Text>}
+            </View>
           </>
         )}
       </ScrollView>

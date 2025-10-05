@@ -1,4 +1,5 @@
 import { baseApi } from '@/services/baseApi';
+import { CreatePaymentRequest, CreatePaymentResponse } from '@/services/paymentApi';
 
 type CreateVendorOwnerRequest = FormData;
 
@@ -33,9 +34,19 @@ type Subscription = {
     status: string;
 };
 
+
+
 type CategoriesResponse = Category[];
 
 type SubscriptionsResponse = Subscription[];
+
+type PaymentMethod = {
+  name: string;
+  account_number: string;
+  account_holder: string;
+  type?: string | null;
+  details?: Record<string, unknown>;
+};
 
 type VendorStatusResponse = {
   hasVendor: boolean;
@@ -46,6 +57,8 @@ type VendorStatusResponse = {
     isApproved: boolean;
     status: boolean;
     createdAt: string;
+    address_line1?: string;
+    payment_method?: PaymentMethod;
     categories: Array<{
       id: number;
       name: string;
@@ -54,6 +67,10 @@ type VendorStatusResponse = {
   };
   message?: string;
 };
+
+// Re-export payment types for backward compatibility
+type CreateRegistrationPaymentRequest = CreatePaymentRequest;
+type CreateRegistrationPaymentResponse = CreatePaymentResponse;
 
 export const applicationApi = baseApi.injectEndpoints({
     endpoints: (build) => ({
@@ -95,7 +112,18 @@ export const applicationApi = baseApi.injectEndpoints({
             providesTags: ['VendorStatus'],
         }),
 
-        
+        // Minimal payment creation to pair with application submission
+        createRegistrationPayment: build.mutation<
+          CreateRegistrationPaymentResponse,
+          CreateRegistrationPaymentRequest
+        >({
+          query: (body) => ({
+            url: '/vendor-registration/payment', // Updated to use correct endpoint
+            method: 'POST',
+            body,
+          }),
+          invalidatesTags: ['Payment', 'UserPayments'],
+        }),
     }),
     overrideExisting: true,
 });
@@ -106,6 +134,7 @@ export const {
     useGetCategoriesQuery, 
     useGetSubscriptionsQuery,
     useGetUserVendorStatusQuery,
+    useCreateRegistrationPaymentMutation,
 } = applicationApi;
 
 

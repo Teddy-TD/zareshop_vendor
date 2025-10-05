@@ -2,7 +2,7 @@ import { useLoginMutation } from '@/services/authApi';
 import {  useGetUserVendorStatusQuery } from '@/services/applicationApi';
 import { useAppDispatch } from '@/store/hooks';
 import { setCredentialsAndPersist } from '@/features/auth/authSlice';
-import { extractUserFromToken } from '@/utils/jwtUtils';
+import { extractUserFromToken, isVendorToken, isTokenExpired } from '@/utils/jwtUtils';
 import React, { useState, useRef } from 'react';
 import {
   View,
@@ -59,8 +59,8 @@ export default function LoginScreen() {
 
     if (vendorStatusError) {
       console.error('Error checking vendor status:', vendorStatusError);
-      Alert.alert('Error', 'Could not fetch vendor status. Redirecting to application.');
-      router.replace('/auth/application');
+      Alert.alert('Error', 'Could not fetch vendor status. Redirecting to vendor registration.');
+      router.replace('/auth/vendor-registration' as any);
       return;
     }
 
@@ -68,8 +68,8 @@ export default function LoginScreen() {
       const { hasVendor, vendor } = vendorStatusData;
 
       if (!hasVendor) {
-        console.log('🔍 No vendor found, redirecting to application');
-        router.replace('/auth/application');
+        console.log('🔍 No vendor found, redirecting to vendor registration');
+        router.replace('/auth/vendor-registration' as any);
       } else if (vendor && !vendor.isApproved) {
         console.log('🔍 Vendor exists but not approved, redirecting to pending approval');
         router.replace('/auth/pending-approval');
@@ -77,12 +77,12 @@ export default function LoginScreen() {
         console.log('🔍 Vendor approved, redirecting to main app');
         router.replace('/(tabs)');
       } else {
-        console.log('🔍 Unknown vendor status, redirecting to application');
-        router.replace('/auth/application');
+        console.log('🔍 Unknown vendor status, redirecting to vendor registration');
+        router.replace('/auth/vendor-registration' as any);
       }
     } else {
-      console.log('🔍 No vendor status data, redirecting to application');
-      router.replace('/auth/application');
+      console.log('🔍 No vendor status data, redirecting to vendor registration');
+      router.replace('/auth/vendor-registration' as any);
     }
   };
 
@@ -274,10 +274,25 @@ export default function LoginScreen() {
       console.log('🔍 Response keys:', Object.keys(result));
 
       if (result.token) {
+        // Validate token before proceeding
+        if (isTokenExpired(result.token)) {
+          throw new Error('Received expired token from server');
+        }
+
+        if (!isVendorToken(result.token)) {
+          throw new Error('This app is for vendor accounts only. Please use a vendor account to log in.');
+        }
+
         let userData;
 
         if (result.user && result.user.id) {
           console.log('🔍 Using user data from login response:', result.user);
+          
+          // Validate user type from response
+          if (result.user.type !== 'vendor_owner') {
+            throw new Error('This app is for vendor accounts only. Please use a vendor account to log in.');
+          }
+          
           userData = result.user;
         } else {
           console.log('⚠️ No user data in login response, extracting from token');
@@ -285,6 +300,10 @@ export default function LoginScreen() {
           console.log('🔍 Extracted from token:', tokenUser);
 
           if (tokenUser) {
+            if (tokenUser.type !== 'vendor_owner') {
+              throw new Error('This app is for vendor accounts only. Please use a vendor account to log in.');
+            }
+            
             userData = {
               id: tokenUser.id,
               name: '',

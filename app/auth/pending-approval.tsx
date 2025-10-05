@@ -8,10 +8,11 @@ import {
   TouchableOpacity,
   ScrollView,
 } from "react-native";
-import { Clock, CheckCircle, AlertCircle, ArrowLeft } from "lucide-react-native";
+import { Clock, CheckCircle, AlertCircle, ArrowLeft, CreditCard } from "lucide-react-native";
 import { router } from "expo-router";
 import { COLORS, SIZES } from "@/constants/theme";
 import CustomButton from "@/components/CustomButton";
+import PaymentStatusTracker from "@/components/PaymentStatusTracker";
 
 export default function PendingApprovalScreen() {
   const handleGoBack = () => {
@@ -41,32 +42,32 @@ export default function PendingApprovalScreen() {
           <View style={styles.statusIcon}>
             <Clock size={56} color={COLORS.warning} />
           </View>
-          <Text style={styles.statusTitle}>Application Under Review</Text>
+          <Text style={styles.statusTitle}>Complete Application Under Review</Text>
           <Text style={styles.statusSubtitle}>
-            Thank you for submitting your vendor application. Our team is
-            currently reviewing your information.
+            Thank you for submitting your complete vendor application! Our admin team is
+            reviewing both your payment proof and vendor details together.
           </Text>
         </View>
 
         {/* Stepper / Timeline */}
         <View style={styles.stepper}>
           <Step
-            title="Application Submitted"
-            subtitle="We have received your application"
+            title="Complete Application Submitted"
+            subtitle="Payment proof and vendor details received"
             completed active={undefined}          />
           <Step
-            title="Under Review"
-            subtitle="Our team is verifying your information"
+            title="Admin Review"
+            subtitle="Payment and vendor info being verified together"
             completed active={undefined}
           />
           <Step
-            title="Approval Decision"
-            subtitle="You'll receive an email with the result"
+            title="Unified Approval Decision"
+            subtitle="Single decision for payment and vendor approval"
             completed active={undefined}
           />
           <Step
             title="Account Activation"
-            subtitle="If approved, start selling on ZareShop"
+            subtitle="If approved, start selling immediately"
             completed active={undefined}
             
           />
@@ -80,13 +81,26 @@ export default function PendingApprovalScreen() {
           </Text>
         </View>
 
+        {/* Payment Status */}
+        <View style={styles.paymentSection}>
+          <View style={styles.sectionHeader}>
+            <CreditCard size={20} color={COLORS.primary} />
+            <Text style={styles.sectionTitle}>Payment Status</Text>
+          </View>
+          <PaymentStatusTracker 
+            showCreateButton={false}
+            style={styles.paymentTracker}
+          />
+        </View>
+
         {/* Next Steps */}
         <View style={styles.nextSteps}>
           <Text style={styles.nextStepsTitle}>What happens next?</Text>
           <View style={styles.nextStepsList}>
-            <NextStep text="We'll verify your business information and documents" />
-            <NextStep text="You'll receive an email notification with the decision" />
-            <NextStep text="If approved, you can start setting up your store" />
+            <NextStep text="Admin reviews your payment proof and vendor application together" />
+            <NextStep text="Single approval decision covers both payment and vendor account" />
+            <NextStep text="You'll receive one email notification with the complete decision" />
+            <NextStep text="If approved, your vendor account is immediately activated" />
           </View>
         </View>
       </ScrollView>
@@ -96,6 +110,11 @@ export default function PendingApprovalScreen() {
         <CustomButton
           title="Contact Support"
           onPress={handleContactSupport}
+          variant="outline"
+        />
+        <CustomButton
+          title="View Payments"
+          onPress={() => router.push('/payment/index' as any)}
           variant="outline"
         />
 
@@ -258,6 +277,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textLight,
     fontWeight: "500",
+  },
+  paymentSection: {
+    marginHorizontal: SIZES.lg,
+    marginTop: SIZES.lg,
+    backgroundColor: COLORS.card,
+    borderRadius: SIZES.radius,
+    padding: SIZES.md,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: SIZES.md,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.text,
+    marginLeft: SIZES.sm,
+  },
+  paymentTracker: {
+    backgroundColor: 'transparent',
   },
   nextSteps: {
     marginHorizontal: SIZES.lg,

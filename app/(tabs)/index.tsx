@@ -9,13 +9,12 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { TrendingUp, ShoppingBag, TriangleAlert as AlertTriangle, DollarSign, Bell } from 'lucide-react-native';
-import { router } from 'expo-router';
+import {router} from 'expo-router';
 import { COLORS, SIZES } from '@/constants/theme';
 import StatsCard from '@/components/StatsCard';
 import AnimatedCard from '@/components/AnimatedCard';
 import { useAuth } from '@/hooks/useAuth';
 import { useGetVendorByPhoneQuery } from '@/services/vendorApi';
-import { useGetOrdersStatsQuery } from '@/services/orderApi';
 import { useGetProductsByStockStatusQuery } from '@/services/productApi';
 import { useGetUserUnreadCountQuery } from '@/services/notificationApi';
 
@@ -31,10 +30,9 @@ export default function Dashboard() {
   const userId = vendorData?.user?.id;
   const { data: unread } = useGetUserUnreadCountQuery(userId as number, { skip: !userId });
 
-  const { data: orderStats, isLoading: isLoadingStats } = useGetOrdersStatsQuery(
-    { vendorId: vendorId as number },
-    { skip: !vendorId }
-  );
+  // Orders stats endpoint not available on backend; leave undefined and guard with optional chaining.
+  const orderStats: any = undefined;
+  const isLoadingStats = false;
 
   const { data: lowStock } = useGetProductsByStockStatusQuery(
     { status: 'low_stock', vendor_id: vendorId as number, page: 1, limit: 1 },

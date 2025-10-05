@@ -135,9 +135,41 @@ export const formatPhoneNumber = (phoneNumber: string): string => {
 
 // Clean phone number for API calls
 export const cleanPhoneNumber = (phoneNumber: string): string => {
-  const cleanPhone = phoneNumber.replace(/\D/g, '');
-  // Return with +251 prefix for Ethiopian numbers
-  return `+251${cleanPhone}`;
+  const input = (phoneNumber || '').trim();
+
+  // If already E.164 Ethiopia mobile: +2519xxxxxxxx
+  if (/^\+2519\d{8}$/.test(input)) return input;
+
+  // Strip all non-digits for normalization
+  const digits = input.replace(/\D/g, '');
+
+  // 2519xxxxxxxx (12 digits) -> +2519xxxxxxxx
+  if (digits.startsWith('2519') && digits.length === 12) {
+    return `+251${digits.slice(3)}`;
+  }
+
+  // 09xxxxxxxx (10 digits) -> +2519xxxxxxxx
+  if (digits.startsWith('09') && digits.length === 10) {
+    return `+251${digits.slice(1)}`;
+  }
+
+  // 9xxxxxxxx (9 digits) -> +2519xxxxxxxx
+  if (digits.startsWith('9') && digits.length === 9) {
+    return `+251${digits}`;
+  }
+
+  // Fallback: if it contains country code and extra chars, try to take last 9 digits (starting with 9)
+  if (digits.startsWith('251') && digits.length >= 12 && /^9\d{8}$/.test(digits.slice(-9))) {
+    return `+251${digits.slice(-9)}`;
+  }
+
+  // If it's exactly 12 digits starting with 251, preserve as +251xxxxxxxxx
+  if (digits.startsWith('251') && digits.length === 12) {
+    return `+${digits}`;
+  }
+
+  // As a safe default, return the original trimmed input
+  return input;
 };
 
 // Validation rules for form fields

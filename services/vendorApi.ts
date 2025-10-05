@@ -35,19 +35,10 @@ export const vendorApi = baseApi.injectEndpoints({
       providesTags: ["Vendor"],
     }),
 
-    // Get vendor by ID
-    getVendorById: build.query<GetVendorByPhoneResponse, number>({
-      query: (vendorId) => ({
-        url: `vendors/${vendorId}`,
-        method: "GET",
-      }),
-      providesTags: (result, error, vendorId) => [{ type: "Vendor", id: vendorId }],
-    }),
   }),
   overrideExisting: true,
 });
 
 export const {
   useGetVendorByPhoneQuery,
-  useGetVendorByIdQuery,
 } = vendorApi;

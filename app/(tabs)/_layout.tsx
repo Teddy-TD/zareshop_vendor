@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Chrome as Home, Package, ShoppingCart, CreditCard, User } from 'lucide-react-native';
+import { Chrome as Home, Package, ShoppingCart, CreditCard, User, Receipt } from 'lucide-react-native';
 import { COLORS } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect } from 'react';
@@ -79,6 +79,15 @@ export default function TabLayout() {
           title: 'Payouts',
           tabBarIcon: ({ size, color }) => (
             <CreditCard size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="payments"
+        options={{
+          title: 'Payments',
+          tabBarIcon: ({ size, color }) => (
+            <Receipt size={size} color={color} />
           ),
         }}
       />

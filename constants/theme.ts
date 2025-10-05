@@ -5,6 +5,8 @@ export const COLORS = {
   text: '#111827',          // Deep neutral text for readability
   textLight: '#6B7280',     // Muted gray for secondary text
   white: '#FFFFFF',
+  black: '#000000',         // Added black color
+  gray: '#6B7280',          // Added gray color (same as textLight)
   error: '#EF4444',         // Modern red (error state)
   warning: '#F59E0B',       // Warm amber
   success: '#16A34A',       // Clean green (used for success states)

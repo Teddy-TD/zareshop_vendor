@@ -130,7 +130,7 @@ export const payoutApi = baseApi.injectEndpoints({
       { vendorId: number }
     >({
       query: ({ vendorId }) => ({
-        url: `payouts/vendor/${vendorId}/stats`,
+        url: `payout/vendor/${vendorId}/stats`,
         method: "GET",
       }),
       providesTags: ["Payouts"],
@@ -142,7 +142,7 @@ export const payoutApi = baseApi.injectEndpoints({
       GetVendorPayoutHistoryParams
     >({
       query: ({ vendorId, page = 1, limit = 10, status }) => ({
-        url: `payouts/vendor/${vendorId}/history`,
+        url: `payout/vendor/${vendorId}/history`,
         method: "GET",
         params: { page, limit, status },
       }),
@@ -155,7 +155,7 @@ export const payoutApi = baseApi.injectEndpoints({
       { vendorId: number; data: CreatePayoutRequestRequest }
     >({
       query: ({ vendorId, data }) => ({
-        url: `payouts/vendor/${vendorId}/request`,
+        url: `payout/vendor/${vendorId}/request`,
         method: "POST",
         body: data,
       }),
@@ -168,7 +168,7 @@ export const payoutApi = baseApi.injectEndpoints({
       { payoutId: number }
     >({
       query: ({ payoutId }) => ({
-        url: `payouts/${payoutId}`,
+        url: `payout/${payoutId}`,
         method: "GET",
       }),
       providesTags: (result, error, { payoutId }) => [
@@ -182,7 +182,7 @@ export const payoutApi = baseApi.injectEndpoints({
       { payoutId: number; data: UpdatePayoutRequestStatusRequest }
     >({
       query: ({ payoutId, data }) => ({
-        url: `payouts/${payoutId}/status`,
+        url: `payout/${payoutId}/status`,
         method: "PATCH",
         body: data,
       }),

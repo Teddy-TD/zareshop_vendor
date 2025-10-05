@@ -23,12 +23,31 @@ export const decodeJWT = (token: string) => {
 export const extractUserFromToken = (token: string) => {
   const decoded = decodeJWT(token);
   if (decoded && decoded.id && decoded.type) {
+    console.log('🔍 Extracted user from token:', { id: decoded.id, type: decoded.type });
     return {
       id: decoded.id.toString(),
       type: decoded.type,
     };
   }
+  console.log('❌ Failed to extract user from token:', decoded);
   return null;
+};
+
+// Validate if a token is for a vendor user
+export const isVendorToken = (token: string): boolean => {
+  const user = extractUserFromToken(token);
+  return user?.type === 'vendor_owner';
+};
+
+// Check if token is expired
+export const isTokenExpired = (token: string): boolean => {
+  const decoded = decodeJWT(token);
+  if (!decoded || !decoded.exp) {
+    return true; // Consider invalid tokens as expired
+  }
+  
+  const currentTime = Math.floor(Date.now() / 1000);
+  return decoded.exp < currentTime;
 };
 
 
